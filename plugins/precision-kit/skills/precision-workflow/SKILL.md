@@ -1,6 +1,6 @@
 ---
 name: precision-workflow
-description: Master workflow for ANY software task in any project - feature, bug fix, refactor, cleanup, upgrade, live modernization, portability, new project, CI, docs, performance, migration, UI change, PR feedback, or a question about code. Use it at the start of every such task, even small ones, before touching a file. It routes to the specialised precision-kit skills and defines the gates a change must pass before it is called done.
+description: Master workflow for ANY software task in any project - feature, bug fix, refactor, cleanup, upgrade, live modernization, portability, project audit, project vault, new project, CI, docs, performance, migration, UI change, PR feedback, or a question about code. Use it at the start of every such task, even small ones, before touching a file. It routes to the specialised precision-kit skills and defines the gates a change must pass before it is called done.
 ---
 
 # Precision Workflow
@@ -14,6 +14,7 @@ gate: a one-line fix still gets located precisely, verified and self-reviewed.
 | Task | Primary skills (in order) |
 |------|---------------------------|
 | Question / explain / "where is" | `codebase-qa` (no code changes) |
+| "Is it finished / production-ready / checked from all sides?" | `project-audit` |
 | Bug, crash, failing test/CI | `root-cause-debug` -> `test-strategy` |
 | Feature / integration | `modern-integration` -> `test-strategy` -> `legacy-cleanup` |
 | Refactor / rename / move | `safe-refactor` -> `legacy-cleanup` |
@@ -28,7 +29,8 @@ gate: a one-line fix still gets located precisely, verified and self-reviewed.
 | CI / pipelines / releases | `ci-setup` |
 | Docs | `docs-sync` |
 | PR review comments / red checks | `pr-feedback` |
-Always on: `efficiency-guard` (start), `code-map` (orient + ranged reads; keep notes current),
+Always on: `project-vault` (read PLAN.md first, the relevant vault file before work, update it in the same commit),
+`efficiency-guard` (start), `code-map` (orient + ranged reads; keep notes current),
 `codebase-recon` (before edits),
 `verification-gate` + `secret-scan` + `self-review` (before commit),
 `docs-sync` + `project-memory` (when behaviour or setup changed), `git-delivery` (end).
@@ -38,7 +40,7 @@ Always on: `efficiency-guard` (start), `code-map` (orient + ranged reads; keep n
 | # | Phase | Skill | Exit gate |
 |---|-------|-------|-----------|
 | 0 | Budget | `efficiency-guard` | Task sized (S/M/L), stop condition known |
-| 1 | Intake | `task-intake` | Acceptance criteria written; assumptions stated |
+| 1 | Intake | `task-intake`, `project-vault` (PRD, PLAN) | Acceptance criteria written and traced to PRD/PLAN; assumptions stated |
 | 2 | Recon | `code-map`, `codebase-recon` | Exact files/lines named; conventions + check commands known |
 | 3 | Baseline | `verification-gate` | Checks run BEFORE editing; pre-existing failures recorded |
 | 4 | Plan | (this file) | Smallest diff meeting every criterion; blast radius listed |
@@ -47,7 +49,7 @@ Always on: `efficiency-guard` (start), `code-map` (orient + ranged reads; keep n
 | 7 | Test | `test-strategy` (+ `ui-verify`) | Each criterion has a test that fails without the change |
 | 8 | Verify | `verification-gate`, `secret-scan` | Verdict PASS (every SKIP/FAIL explained); no secrets |
 | 9 | Review | `self-review` | Diff read line by line; checklist clean |
-| 10 | Deliver | `git-delivery`, `project-memory` | Committed, pushed, honest report; memory updated if learned something |
+| 10 | Deliver | `project-vault`, `git-delivery`, `project-memory` | Vault synced (PLAN step ticked, described facts updated), committed, pushed, honest report |
 
 ## Sizing (decides depth, not whether a phase happens)
 - **S** - one file, obvious location, < ~30 lines: phases 1-2 take a minute;

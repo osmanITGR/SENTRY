@@ -98,6 +98,7 @@ def main() -> int:
                 continue
             ran.append(f"{p['root']}: {cmd}")
             try:
+                # audit: allow - runs the project's own command lines
                 out = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace",
                                      timeout=args.timeout, env=env)
                 text = (out.stdout or "") + (out.stderr or "")

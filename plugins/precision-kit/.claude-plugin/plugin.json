@@ -1,14 +1,23 @@
 {
   "name": "precision-kit",
   "displayName": "Precision Kit",
-  "version": "2.3.0",
-  "description": "26 project-agnostic engineering skills (incremental code map for ranged reads, works-on-every-machine portability checks with clean-room proof, recon, live modernization against current registries/advisories, modern integration, legacy cleanup, testing, verification, debugging, security, CI, docs, performance, migrations, UI checks) plus hooks that keep the code map current, inject build/test commands at session start and block commits that leak secrets or fail checks.",
+  "version": "2.4.0",
+  "description": "28 project-agnostic engineering skills (mandatory project vault routed from CLAUDE.md, whole-project audit with scores and release verdict, incremental code map for ranged reads, works-on-every-machine portability with clean-room proof, recon, live modernization against current registries/advisories, modern integration, legacy cleanup, testing, verification, debugging, security, CI, docs, performance, migrations, UI checks) plus hooks that keep the code map and vault current, inject build/test commands at session start, and block commits that leak secrets, fail checks or leave the vault stale.",
   "author": {
     "name": "Lcpl Osman Gani"
   },
   "repository": "https://github.com/osmanITGR/precision-kit",
   "license": "MIT",
-  "keywords": ["workflow", "testing", "verification", "refactoring", "dead-code", "secrets", "ci", "code-quality"],
+  "keywords": [
+    "workflow",
+    "testing",
+    "verification",
+    "refactoring",
+    "dead-code",
+    "secrets",
+    "ci",
+    "code-quality"
+  ],
   "userConfig": {
     "verify_on_commit": {
       "type": "boolean",
@@ -20,6 +29,12 @@
       "type": "boolean",
       "title": "Live freshness note at session start",
       "description": "Show a one-line summary of outdated/vulnerable/deprecated dependencies at session start. Uses a daily cache refreshed in the background, so startup is never delayed.",
+      "default": true
+    },
+    "vault_required": {
+      "type": "boolean",
+      "title": "Require the project vault",
+      "description": "Block git commits in code projects until docs/vault (PRD, STATE, TOKENS, STACK, SCHEMA, PLAN) and the CLAUDE.md router exist and detected sections are in sync.",
       "default": true
     }
   }

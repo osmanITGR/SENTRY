@@ -35,6 +35,8 @@ CODE_MAP = SKILLS / "code-map/scripts/code_map.py"
 POST_EDIT = KIT / "hooks/post_edit_map.py"
 AUDIT = SKILLS / "portable-project/scripts/portability_audit.py"
 CLEAN_ROOM = SKILLS / "portable-project/scripts/clean_room.py"
+PROJECT_AUDIT = SKILLS / "project-audit/scripts/project_audit.py"
+VAULT = SKILLS / "project-vault/scripts/vault.py"
 failures: list[str] = []
 
 
@@ -218,9 +220,10 @@ def test_ci_and_packaging() -> None:
 
 
 def hook(script: Path, payload: dict, cwd: Path, env: dict | None = None):
+    base = {"CLAUDE_PLUGIN_OPTION_VAULT_REQUIRED": "false"}  # the vault gate has its own tests
     return subprocess.run([sys.executable, str(script)], input=json.dumps(payload), cwd=cwd,
                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600,
-                          env={**os.environ, **(env or {})})
+                          env={**os.environ, **base, **(env or {})})
 
 
 def test_hooks() -> None:
@@ -409,8 +412,9 @@ def test_code_map() -> None:
         check("Command API client" in cm("summary").stdout and "## web/src/ - Frontend" in cm("summary").stdout,
               "code-map: notes appear in summary")
         legacy = {**os.environ, "LC_ALL": "POSIX", "PYTHONCOERCECLOCALE": "0", "PYTHONUTF8": "0"}
-        bn = subprocess.run([sys.executable, str(CODE_MAP), "--repo", str(root), "note", "api/store.py",
-                             "সংরক্ষণ মডিউল"], capture_output=True, env=legacy)
+        bn_arg = "সংরক্ষণ মডিউল".encode("utf-8") if os.name != "nt" else "সংরক্ষণ মডিউল"  # raw bytes, like a UTF-8 terminal
+        bn = subprocess.run([sys.executable, str(CODE_MAP), "--repo", str(root), "note", "api/store.py", bn_arg],
+                            capture_output=True, env=legacy)
         saved = json.loads((root / ".claude/code-map/notes.json").read_text(encoding="utf-8")).get("api/store.py", {})
         check(bn.returncode == 0 and saved.get("text") == "সংরক্ষণ মডিউল",
               "code-map: non-ASCII note survives a legacy (non-UTF-8) locale")
@@ -542,6 +546,190 @@ def test_portable_project() -> None:
               and "shell: bash" in y, "gen_ci: cross-OS matrix with bash on every runner")
 
 
+def test_project_audit() -> None:
+    audit = lambda root, *a: subprocess.run([sys.executable, str(PROJECT_AUDIT), str(root), "--offline", *a],
+                                            capture_output=True, text=True, timeout=900)
+    with tempfile.TemporaryDirectory() as tmp:  # a project with problems in every area
+        root = Path(tmp)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        write(root, "app/pubspec.yaml", "name: app\ndependencies:\n  flutter:\n    sdk: flutter\n")
+        write(root, "app/lib/main.dart", "void main() {\n  try { run(); } catch (e) {}\n}\n")
+        write(root, "app/android/app/build.gradle", "android {\n  buildTypes { release { signingConfig signingConfigs.debug } }\n}\n")
+        write(root, "app/android/app/src/main/AndroidManifest.xml",
+              '<application android:debuggable="true" android:usesCleartextTraffic="true"/>\n')
+        write(root, "web/index.html", '<html><body><img src="a.png"><button><svg></svg></button></body></html>\n')
+        write(root, "web/app.js", "const r = eval(input)\nel.innerHTML = data\nfetch('http://api.robot-cloud.com/x')\n"
+              "try { go() } catch (e) {}\n")
+        write(root, "api/db.py", "import requests\n\ndef q(cur, name):\n    cur.execute(f\"SELECT * FROM t WHERE n = '{name}'\")\n"
+              "    requests.get('https://x', verify=False)\n    try:\n        pass\n    except:\n        pass\n")
+        write(root, "api/requirements.txt", "requests==2.32.4\n")
+        write(root, ".env", "API_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789AB\n")  # secret-scan: allow (fake fixture)
+        write(root, "node_modules/x/index.js", "module.exports = 1\n")
+        (root / "release").mkdir()
+        (root / "release/app.apk").write_bytes(b"PK\x03\x04")
+        git_commit_all(root)
+        out = audit(root, "--json")
+        d = json.loads(out.stdout)
+        areas = d["areas"]
+        probs = lambda area: " | ".join(f["problem"] for f in areas[area]["findings"])
+        check(out.returncode == 1 and d["verdict"] == "NOT READY", "audit: broken project -> NOT READY, exit 1")
+        check(d["overall"] is not None and d["overall"] <= 49 and d["grade"] == "F", f"audit: critical caps grade ({d['overall']})")
+        check({"mobile", "web"} <= set(d["types"]), f"audit: project types detected ({d['types']})")
+        check("GitHub token" in probs("security") and "sensitive file committed" in probs("security"),
+              "audit: committed secret and .env")
+        for text in ("eval()", "SQL built by string", "TLS certificate verification", "debuggable", "cleartext",
+                     "raw HTML", "plain-HTTP URL"):
+            check(text in probs("security"), f"audit: security pattern '{text}'")
+        check("empty catch" in probs("errors") and "bare except" in probs("errors"), "audit: swallowed errors")
+        check("image without alt" in probs("a11y") and "page language" in probs("a11y")
+              and "icon-only button" in probs("a11y"), "audit: accessibility issues")
+        check("release build signed with the debug key" in probs("release") and "no app version" in probs("release")
+              and "privacy policy" in probs("release"), "audit: mobile release readiness")
+        check("generated/cache files committed" in probs("hygiene") and "binary" in probs("hygiene")
+              and "no .gitignore" in probs("hygiene"), "audit: repo hygiene")
+        check("no README" in probs("docs") and "no LICENSE" in probs("docs"), "audit: documentation")
+        check("no CI" in probs("ci"), "audit: missing CI")
+        check(areas["dependencies"]["status"] == "not checked: --offline" and areas["dependencies"]["score"] is None,
+              "audit: unchecked area reported, not counted")
+        md = audit(root, "--quick").stdout
+        check("## Fix first" in md and "| Security |" in md and "Build & tests pass | - | - | 0 | not checked: --quick" in md,
+              "audit: markdown report with --quick honoured")
+        only = json.loads(audit(root, "--json", "--only", "docs").stdout)
+        check(only["areas"]["security"]["status"].startswith("not checked") and only["areas"]["docs"]["score"] is not None,
+              "audit: --only limits the areas")
+
+    with tempfile.TemporaryDirectory() as tmp:  # a well-kept library scores high and is READY
+        root = Path(tmp)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        write(root, "pyproject.toml", '[project]\nname = "calc"\nversion = "1.0.0"\ndescription = "Small calculator"\n'
+              'readme = "README.md"\nlicense = "MIT"\nrequires-python = ">=3.11"\ndependencies = []\n')
+        write(root, ".python-version", "3.12\n")
+        write(root, "README.md", "# calc\n\nSmall calculator library.\n\n## Install\n\npip install calc\n\n## Usage\n\n"
+              "```python\nfrom calc import add\nadd(1, 2)\n```\n\n## Development\n\nRun the tests with "
+              "`python -m unittest`.\n" + "\n" * 6)
+        write(root, "LICENSE", "MIT License\n")
+        write(root, "CHANGELOG.md", "# Changelog\n\n## 1.0.0\n- first release\n")
+        write(root, ".gitignore", "__pycache__/\n.venv/\n")
+        write(root, ".github/workflows/ci.yml", "jobs:\n  t:\n    steps:\n      - run: ruff check .\n"
+              "      - run: python -m unittest\n")
+        write(root, ".github/dependabot.yml", "version: 2\n")
+        write(root, "calc/__init__.py", '"""Calculator."""\n\n\ndef add(a: int, b: int) -> int:\n    return a + b\n')
+        write(root, "tests/__init__.py", "")
+        write(root, "tests/test_calc.py", "import unittest\nfrom calc import add\n\n\nclass T(unittest.TestCase):\n"
+              "    def test_add(self):\n        self.assertEqual(add(1, 2), 3)\n")
+        fill_vault(root)
+        git_commit_all(root)
+        subprocess.run(["git", "tag", "v1.0.0"], cwd=root, check=True)
+        d = json.loads(audit(root, "--json").stdout)
+        worst = [(f["severity"], f["problem"]) for a in d["areas"].values() for f in a["findings"]
+                 if f["severity"] in ("critical", "high", "medium")]
+        check(d["verdict"] == "READY" and d["overall"] >= 90, f"audit: well-kept project READY ({d['overall']}, {worst[:3]})")
+        check(d["areas"]["build-test"]["score"] == 100, "audit: build/tests actually run and pass")
+        write(root, "config/prod.env", "DB_PASSWORD=Xk29!fPq77zL\n")  # secret-scan: allow (fake fixture)
+        git_commit_all(root)
+        d = json.loads(audit(root, "--json", "--quick").stdout)
+        check(d["verdict"] == "NOT READY" and d["overall"] <= 49,
+              f"audit: one critical caps an otherwise good project ({d['overall']})")
+
+
+def fill_vault(root: Path) -> None:
+    subprocess.run([sys.executable, str(VAULT), "init", str(root)], capture_output=True, check=True)
+    for name in ("PRD", "STATE", "TOKENS", "SCHEMA", "PLAN"):
+        p = root / f"docs/vault/{name}.md"
+        text = p.read_text(encoding="utf-8")
+        text = text.replace("- [ ] 1. TODO(vault) - acceptance: ...", "- [x] 1. Core API - acceptance: tests pass")
+        text = text.replace("TODO(vault)", "Defined")
+        if name in ("TOKENS", "SCHEMA", "STATE"):
+            text = text.replace("Status: Defined", "Status: N/A - library without UI or storage", 1)
+        p.write_text(text, encoding="utf-8")
+    subprocess.run([sys.executable, str(VAULT), "sync", str(root)], capture_output=True, check=True)
+
+
+def test_project_vault() -> None:
+    v = lambda root, *a: subprocess.run([sys.executable, str(VAULT), *a, str(root)], capture_output=True, text=True,
+                                        encoding="utf-8", timeout=300)
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        write(root, "web/package.json", json.dumps({"name": "w", "dependencies": {"react": "18.2.0"}}))
+        write(root, "web/src/app/page.tsx", "export default function P() { return null }\n")
+        write(root, "web/src/app/settings/page.tsx", "export default function S() { return null }\n")
+        write(root, "web/src/theme.css", ":root { --color-primary: #0F766E; --space-2: 8px; }\n")
+        write(root, "web/src/store.ts", "export enum RobotState { Idle, Moving, Error }\n")
+        write(root, "api/pyproject.toml", '[project]\nname = "api"\nversion = "0.1.0"\ndependencies = ["django==5.0.1"]\n')
+        write(root, "api/app/models.py", "from django.db import models\n\n\nclass Mission(models.Model):\n"
+              "    name = models.CharField(max_length=80)\n")
+        write(root, "db/migrations/001.sql", "CREATE TABLE scans (id INTEGER PRIMARY KEY, result TEXT);\n")
+        write(root, "mobile/lib/theme.dart", "class C { static const Color primary = Color(0xFF0F766E); }\n"
+              "enum LinkStatus { connected, lost }\n")
+        git_commit_all(root)
+
+        check("MISSING" in v(root, "status").stdout, "vault: status reports a missing vault")
+        out = v(root, "check")
+        check(out.returncode == 1 and out.stdout.count("missing") >= 6 and "no vault router" in out.stdout,
+              "vault: check fails on missing files and router")
+        bash = lambda c: {"tool_name": "Bash", "cwd": str(root), "tool_input": {"command": c}}
+        gate_env = {"CLAUDE_PLUGIN_OPTION_VAULT_REQUIRED": "true", "CLAUDE_PLUGIN_OPTION_VERIFY_ON_COMMIT": "false"}
+        g = hook(GUARD, bash("git commit -am x"), root, gate_env)
+        check(g.returncode == 2 and "project vault" in g.stderr, "vault gate: commit blocked without a vault")
+        check(hook(GUARD, bash("PRECISION_SKIP_VAULT=1 git commit -am x"), root, gate_env).returncode == 0,
+              "vault gate: explicit skip honoured")
+
+        v(root, "init")
+        vd = root / "docs/vault"
+        check(all((vd / f"{n}.md").exists() for n in ("PRD", "STATE", "TOKENS", "STACK", "SCHEMA", "PLAN")),
+              "vault: init creates the six files")
+        claude = (root / "CLAUDE.md").read_text(encoding="utf-8")
+        check(all(f"](docs/vault/{n}.md)" in claude for n in ("PRD", "STATE", "TOKENS", "STACK", "SCHEMA", "PLAN")),
+              "vault: CLAUDE.md routes to all six files")
+        stack, schema = (vd / "STACK.md").read_text(encoding="utf-8"), (vd / "SCHEMA.md").read_text(encoding="utf-8")
+        tokens, state = (vd / "TOKENS.md").read_text(encoding="utf-8"), (vd / "STATE.md").read_text(encoding="utf-8")
+        check("| web/package.json | npm | react | 18.2.0 |" in stack and "| api/pyproject.toml | pypi | django | 5.0.1 |" in stack,
+              "vault: STACK lists dependencies with versions")
+        check("| scans | id integer, result text |" in schema and "| Mission | name charfield |" in schema,
+              "vault: SCHEMA detects SQL and Django entities")
+        check("--color-primary" in tokens and "Color(0xFF0F766E)" in tokens, "vault: TOKENS detects CSS and Flutter tokens")
+        check("| /settings | Next.js app router |" in state and "RobotState | Idle, Moving, Error" in state
+              and "LinkStatus | connected, lost" in state, "vault: STATE detects routes and state enums")
+        check(hook(GUARD, bash("git add -A && git commit -m vault"), root, gate_env).returncode == 0,
+              "vault gate: commit allowed once the vault exists and is in sync")
+        out = v(root, "check")
+        check(out.returncode == 1 and "PRD.md" in out.stdout and "placeholder" in out.stdout,
+              "vault: unfilled PRD/PLAN reported")
+
+        prd = vd / "PRD.md"
+        prd.write_text(prd.read_text(encoding="utf-8").replace(
+            "TODO(vault): who has which problem today, and why it matters.", "দূর থেকে রোবট নিয়ন্ত্রণ করা যায় না।"),
+            encoding="utf-8")
+        git_commit_all(root)
+        write(root, "db/migrations/002.sql", "CREATE TABLE operators (id INTEGER PRIMARY KEY, name TEXT);\n")
+        out = v(root, "check")
+        check("SCHEMA.md: detected section out of date" in out.stdout, "vault: schema change makes SCHEMA stale")
+        g = hook(GUARD, bash("git add -A && git commit -m mig"), root, gate_env)
+        check(g.returncode == 2 and "out of date" in g.stderr, "vault gate: stale vault blocks the commit")
+        v(root, "sync")
+        check("| operators | id integer, name text |" in (vd / "SCHEMA.md").read_text(encoding="utf-8")
+              and "দূর থেকে রোবট নিয়ন্ত্রণ করা যায় না।" in prd.read_text(encoding="utf-8"),
+              "vault: sync updates detected parts and keeps manual (Bangla) text")
+        check("out of date" not in v(root, "check").stdout, "vault: in sync after sync")
+
+        plan = vd / "PLAN.md"
+        plan.write_text(plan.read_text(encoding="utf-8").replace("- [ ] 1. TODO(vault) - acceptance: ...",
+                        "- [x] 1. HUD - acceptance: shows sensors\n- [ ] 2. USB bridge - acceptance: Windows 10"),
+                        encoding="utf-8")
+        st = v(root, "status").stdout
+        check("PLAN 1/" in st and "Next: 2. USB bridge" in st, f"vault: status shows plan progress ({st.strip()[:90]})")
+        check("stale" not in st, "vault: ticking a PLAN step never makes the vault stale")
+        session = hook(SESSION, {"cwd": str(root)}, root, {"CLAUDE_PLUGIN_OPTION_FRESHNESS_ON_START": "false"})
+        check("[precision-kit vault]" in session.stdout and "PLAN" in session.stdout, "session hook: vault status line")
+
+        d = json.loads(subprocess.run([sys.executable, str(PROJECT_AUDIT), str(root), "--offline", "--quick", "--json",
+                                       "--only", "vault"], capture_output=True, text=True).stdout)
+        check(d["areas"]["vault"]["status"] == "checked" and any("placeholder" in f["problem"]
+                                                                  for f in d["areas"]["vault"]["findings"]),
+              "audit: vault area scored from vault.py check")
+
+
 if __name__ == "__main__":
     for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
         if hasattr(_stream, "reconfigure"):
@@ -554,5 +742,7 @@ if __name__ == "__main__":
     test_live_modernize()
     test_code_map()
     test_portable_project()
+    test_project_audit()
+    test_project_vault()
     print(f"\n{'ALL PASSED' if not failures else f'{len(failures)} FAILED'}")
     sys.exit(1 if failures else 0)

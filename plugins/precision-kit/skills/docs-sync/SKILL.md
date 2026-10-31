@@ -27,6 +27,11 @@ same change.
 - CHANGELOG (if kept): Keep-a-Changelog sections (Added/Changed/Fixed/Removed),
   user-facing wording, link PR/issue.
 
+## Project vault
+Vault files are documentation too: when a change alters requirements, flows, tokens,
+versions, schema or plan, update the matching `docs/vault/*.md` (manual part) and run
+`vault.py sync` (detected part) in the same commit (`project-vault`).
+
 ## Verify
 - Run every command you document (or state explicitly which ones could not be
   run here and why).

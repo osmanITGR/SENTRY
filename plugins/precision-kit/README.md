@@ -1,10 +1,11 @@
 # Precision Kit — সব প্রজেক্ট, সব ধরনের কাজের জন্য
 
-Claude-এর কাজ নিখুঁত, দ্রুত আর প্রমাণসহ করার জন্য **২৬টি skill + ৩টি hook**।
+Claude-এর কাজ নিখুঁত, দ্রুত আর প্রমাণসহ করার জন্য **২৮টি skill + ৩টি hook**।
 কোনো নির্দিষ্ট প্রজেক্টের জন্য বানানো নয়। Node, Python, Go, Rust, Flutter/Dart,
 Android/Gradle, Maven, .NET, PlatformIO/Arduino, Makefile — সব ধরনের প্রজেক্ট নিজে থেকেই চেনে, monorepo-ও।
 
-> **English:** A project-agnostic Claude Code plugin — 26 engineering skills (incremental code map
+> **English:** A project-agnostic Claude Code plugin — 28 engineering skills (mandatory project vault
+> routed from CLAUDE.md, whole-project audit with scores and a release verdict, incremental code map
 > for ranged reads, works-on-every-machine portability checks with a clean-room proof, live modernization against current registries/advisories, verification gate,
 > secret scanning, legacy cleanup, testing, CI, docs, migrations, UI checks…) plus hooks that keep
 > the code map current, inject build/test commands at session start, and block commits that leak
@@ -33,11 +34,13 @@ python3 scripts/install.py --project .  # শুধু একটা প্রজ
 ```
 Windows-এ `python3`-এর জায়গায় `python` লিখুন।
 
-## ২৬টি Skill
+## ২৮টি Skill
 
 | ধরন | Skill | কাজ |
 |---|---|---|
 | মূল | `precision-workflow` | কাজের ধরন অনুযায়ী সঠিক skill-এ পাঠায়, প্রতিটা ধাপে gate |
+| | `project-vault` | **বাধ্যতামূলক** ৬টি ফাইল (PRD, STATE, TOKENS, STACK, SCHEMA, PLAN) — CLAUDE.md থেকে রাউট করা, কোড থেকে স্বয়ংক্রিয় আপডেট |
+| | `project-audit` | পুরো প্রজেক্ট ১৪টি দিক থেকে যাচাই: প্রতিটির স্কোর, গ্রেড, "রিলিজের জন্য প্রস্তুত কিনা" রায় |
 | শুরু | `task-intake` | অনুরোধ থেকে যাচাইযোগ্য acceptance criteria |
 | | `efficiency-guard` | সময় নষ্ট রোধ, parallel কাজ, loop-breaker |
 | | `code-map` | পুরো প্রজেক্টের স্বয়ংক্রিয়-আপডেট মানচিত্র: পুরো ফাইল না পড়ে শুধু দরকারি লাইন পড়া |
@@ -75,6 +78,7 @@ Windows-এ `python3`-এর জায়গায় `python` লিখুন�
   - এই তথ্য দিনে একবার background-এ নতুন করে আনা হয়, তাই session শুরু ধীর হয় না।
   - বন্ধ করা যায় `freshness_on_start` অপশন দিয়ে।
 - **`git commit`-এর আগে:**
+  - কোড প্রজেক্টে vault না থাকলে বা কোডের সাথে না মিললে commit **আটকে দেয়** (`vault_required` অপশন)।
   - secret পাওয়া গেলে commit **আটকে দেয়**।
   - পরিবর্তিত প্রজেক্টের চেক FAIL করলে commit **আটকে দেয়**।
   - কোনো চেক চালানো না গেলে Claude-কে সেটা রিপোর্টে বলতে বাধ্য করে।
@@ -90,6 +94,8 @@ Windows-এ `python3`-এর জায়গায় `python` লিখুন�
 | `secret-scan/scripts/scan_secrets.py` | secret ও sensitive ফাইল খোঁজা |
 | `ci-setup/scripts/gen_ci.py` | প্রজেক্টের কমান্ড থেকে CI workflow তৈরি |
 | `code-map/scripts/code_map.py` | প্রজেক্ট-মানচিত্র: `summary`, `find`, `show`, `refs`, `deps`, `note`, `stale` |
+| `project-vault/scripts/vault.py` | vault তৈরি/সিঙ্ক/চেক: `init`, `sync`, `check`, `status` |
+| `project-audit/scripts/project_audit.py` | পুরো প্রজেক্টের স্কোরকার্ড ও রিলিজ-রায় |
 | `portable-project/scripts/portability_audit.py` | "আমার কম্পিউটারে চলে" সমস্যার কারণ খোঁজা |
 | `portable-project/scripts/clean_room.py` | নতুন কপিতে global package ছাড়া ইন্সটল+টেস্ট, এই কম্পিউটারের সাথে তুলনা |
 | `live-modernize/scripts/freshness_report.py` | dependency ও runtime-কে **live** registry/advisory-র সাথে তুলনা |
@@ -103,6 +109,8 @@ Windows-এ `python3`-এর জায়গায় `python` লিখুন�
 | `CLAUDE_PROJECT_DIR` | Claude Code | Project root passed to hooks |
 | `CLAUDE_PLUGIN_OPTION_VERIFY_ON_COMMIT` | `/plugin configure` | `false` disables running checks before `git commit` (secret scan always runs) |
 | `CLAUDE_PLUGIN_OPTION_FRESHNESS_ON_START` | `/plugin configure` | `false` disables the session-start freshness line |
+| `CLAUDE_PLUGIN_OPTION_VAULT_REQUIRED` | `/plugin configure` | `false` stops the commit gate from requiring the project vault |
+| `PRECISION_SKIP_VAULT=1` | you, inside a commit command | only when the user explicitly declines a vault |
 | `PRECISION_SKIP_VERIFY=1` | you, inside a commit command | skip checks once for proven pre-existing failures |
 | `PRECISION_KIT_HTTP_FIXTURE` | tests only | JSON file that replaces live registry responses (offline selftest) |
 

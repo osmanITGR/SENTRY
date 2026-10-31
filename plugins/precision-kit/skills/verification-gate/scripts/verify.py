@@ -86,6 +86,7 @@ def tool_available(tool: str, cwd: Path) -> bool:
 def run(cmd: str, cwd: Path, timeout: int) -> tuple[int, str, float]:
     start = time.monotonic()
     try:
+        # audit: allow - runs the project's own command lines (&&, pipes), never user-supplied input
         proc = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace",
                               timeout=timeout)
         out = (proc.stdout or "") + (proc.stderr or "")

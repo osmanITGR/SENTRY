@@ -12,6 +12,7 @@ and a passing build/test before deleting: dynamic dispatch, reflection,
 string-based lookups, public APIs and framework callbacks are invisible to
 static text matching.
 """
+# audit: allow-file - this file defines detection patterns; scanning it would flag the rules themselves
 from __future__ import annotations
 
 import argparse

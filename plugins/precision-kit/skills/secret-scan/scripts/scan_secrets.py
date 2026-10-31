@@ -14,6 +14,7 @@ Exit 1 when anything is found, 0 when clean. Values are masked in the output.
 Suppress a reviewed false positive with `secret-scan: allow` (or
 `pragma: allowlist secret`) on the same line. Standard library only.
 """
+# audit: allow-file - this file defines detection patterns; scanning it would flag the rules themselves
 from __future__ import annotations
 
 import argparse
@@ -41,11 +42,13 @@ RULES: list[tuple[str, re.Pattern]] = [(name, re.compile(rx)) for name, rx in (
     ("hard-coded secret", r"(?i)\b[\w.-]*(?:password|passwd|pwd|secret|api[_-]?key|apikey|"
                           r"access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret)"
                           r"[\w.-]*['\"]?\s*(?:=|:|:=|=>)\s*['\"]([^'\"\s]{8,})['\"]"),
+    ("secret in KEY=value config", r"^\s*(?:export\s+|ENV\s+)?[A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|APIKEY|"
+                                   r"PRIVATE_KEY|ACCESS_KEY|CLIENT_SECRET|AUTH_KEY)[A-Z0-9_]*\s*[=:]\s*([^\s#'\"]{8,})\s*$"),
     ("credentials passed as string literals",
      r"\b(?:begin|connect|login|authenticate|signIn\w*)\(\s*\"[^\"]{1,64}\"\s*,\s*\"([^\"]{8,})\""),
 )]
 SENSITIVE_FILES = re.compile(
-    r"(^|/)(\.env(\.[\w-]+)?|id_(rsa|dsa|ecdsa|ed25519)|.*\.(pem|key|p12|pfx|jks|keystore|"
+    r"(^|/)(\.env(\.[\w-]+)?|[^/]+\.env|id_(rsa|dsa|ecdsa|ed25519)|.*\.(pem|key|p12|pfx|jks|keystore|"
     r"ppk|mobileprovision)|credentials\.json|service[-_]account.*\.json|\.npmrc|\.pypirc|"
     r"secrets?\.(ya?ml|json|toml))$", re.I)
 SAFE_FILES = re.compile(r"(^|/)\.env\.(example|sample|template|dist)$|\.lock$|-lock\.json$|"
@@ -103,10 +106,12 @@ def scan_line(text: str):
     for name, rx in RULES:
         for m in rx.finditer(text):
             value = m.group(m.lastindex or 0)
-            if name in ("hard-coded secret", "credentials in URL",
+            if name in ("hard-coded secret", "credentials in URL", "secret in KEY=value config",
                         "credentials passed as string literals"):
                 if PLACEHOLDER.match(value) or len(set(value)) < 4:
                     continue
+                if name == "hard-coded secret" and re.fullmatch(r"[a-z]+(?:[-_.][a-z]+)*", value):
+                    continue  # lowercase words only: an identifier/name, not a credential
             yield name, value
 
 

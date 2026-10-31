@@ -20,9 +20,16 @@ from pathlib import Path
 KIT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = KIT / "skills"
 SHARED = {"detect_stack.py": SKILLS_DIR / "codebase-recon" / "scripts" / "detect_stack.py",
-          "verify.py": SKILLS_DIR / "verification-gate" / "scripts" / "verify.py"}
+          "verify.py": SKILLS_DIR / "verification-gate" / "scripts" / "verify.py",
+          **{n: SKILLS_DIR / s / "scripts" / n for n, s in (
+              ("scan_secrets.py", "secret-scan"), ("portability_audit.py", "portable-project"),
+              ("clean_room.py", "portable-project"), ("find_dead_code.py", "legacy-cleanup"),
+              ("freshness_report.py", "live-modernize"), ("code_map.py", "code-map"), ("vault.py", "project-vault"))}}
 NEEDS_SHARED = {"verification-gate": ["detect_stack.py"], "ci-setup": ["detect_stack.py"],
-                "live-modernize": ["detect_stack.py"], "portable-project": ["detect_stack.py", "verify.py"]}
+                "live-modernize": ["detect_stack.py"], "portable-project": ["detect_stack.py", "verify.py"],
+                "project-vault": ["detect_stack.py", "freshness_report.py"],
+                "project-audit": ["detect_stack.py", "verify.py", "scan_secrets.py", "portability_audit.py",
+                                  "clean_room.py", "find_dead_code.py", "freshness_report.py", "code_map.py", "vault.py"]}
 ALLOWED_KEYS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
 
 

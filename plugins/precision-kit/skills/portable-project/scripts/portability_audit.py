@@ -20,6 +20,7 @@ Checks (each finding has a severity and a concrete fix):
 
 Exit 1 when any HIGH finding exists. Standard library only (Python 3.11+).
 """
+# audit: allow-file - this file defines detection patterns; scanning it would flag the rules themselves
 from __future__ import annotations
 
 import argparse

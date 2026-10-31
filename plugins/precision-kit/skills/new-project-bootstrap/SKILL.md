@@ -7,6 +7,11 @@ description: Start a new project, app, service, library, script or prototype the
 
 The first commit decides the quality floor. Make it high and cheap.
 
+## 0. Vault first
+Run the `project-vault` skill's `vault.py init`, then write PRD.md (problem, users, FR-n with
+acceptance criteria) and PLAN.md (ordered steps) with the user *before* scaffolding.
+Record the chosen stack and why in STACK.md; `vault.py sync` fills the detected versions.
+
 ## 1. Choose the stack deliberately
 - Use what the user specified; otherwise pick the mainstream, well-maintained
   option for the platform and state why in one line.

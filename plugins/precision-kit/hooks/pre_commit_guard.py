@@ -5,6 +5,9 @@ secrets are about to be committed or when the project's own checks fail.
 - Secrets (scan_secrets.py over changes since HEAD + untracked): always blocking.
 - Checks (verify.py --changed): blocking on FAIL only. UNVERIFIED/skips are
   passed to Claude as context so they get reported, not hidden.
+- Project vault (vault.py check --gate): blocking when the six vault files or
+  the CLAUDE.md router are missing, or detected sections are out of date.
+  Disable with the plugin option `vault_required` or PRECISION_SKIP_VAULT=1.
 - Escape hatches, for failures proven to pre-exist on the base branch:
   put PRECISION_SKIP_VERIFY=1 in the command, or disable the plugin option
   `verify_on_commit`. Secrets can only be waved through per line with
@@ -23,6 +26,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SCAN = ROOT / "skills" / "secret-scan" / "scripts" / "scan_secrets.py"
 VERIFY = ROOT / "skills" / "verification-gate" / "scripts" / "verify.py"
+VAULT = ROOT / "skills" / "project-vault" / "scripts" / "vault.py"
+DETECT = ROOT / "skills" / "codebase-recon" / "scripts" / "detect_stack.py"
 COMMIT_RE = re.compile(r"(?:^|[;&|(]\s*|\s)git((?:\s+-[Cc]\s+\S+|\s+--[\w-]+(?:=\S+)?)*)\s+commit\b")
 
 
@@ -40,6 +45,16 @@ def repo_dir(cmd: str, cwd: Path, git_opts: str) -> Path:
         target = Path(shlex.split(m.group(1))[0]).expanduser()
         return target if target.is_absolute() else cwd / target
     return cwd
+
+
+def has_project(repo: Path) -> bool:
+    """Vault rules apply to code projects, not to docs-only or empty repositories."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("detect_stack", DETECT)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["detect_stack"] = mod
+    spec.loader.exec_module(mod)
+    return bool(mod.detect(repo, max_depth=3)["projects"])
 
 
 def main() -> int:
@@ -64,6 +79,18 @@ def main() -> int:
               "Move them to env vars/secret storage (see secret-scan skill), then commit again.",
               file=sys.stderr)
         return 2
+
+    vault_opt = os.environ.get("CLAUDE_PLUGIN_OPTION_VAULT_REQUIRED", "true").strip().lower()
+    if vault_opt not in ("false", "0", "no", "off") and "PRECISION_SKIP_VAULT=1" not in cmd and has_project(repo):
+        gate = subprocess.run([sys.executable, str(VAULT), "check", str(repo), "--gate"], capture_output=True,
+                              text=True, encoding="utf-8", errors="replace")
+        if gate.returncode == 1:
+            print("precision-kit blocked this commit: the project vault is missing or out of date.\n"
+                  f"{tail(gate.stdout)}\n"
+                  "Run the project-vault skill: `vault.py init` (first time; then fill PRD.md and PLAN.md) or "
+                  "`vault.py sync` (after code changes), and include the vault + CLAUDE.md in this commit. "
+                  "(Only if the user explicitly declines a vault: PRECISION_SKIP_VAULT=1.)", file=sys.stderr)
+            return 2
 
     option = os.environ.get("CLAUDE_PLUGIN_OPTION_VERIFY_ON_COMMIT", "true").strip().lower()
     if option in ("false", "0", "no", "off") or "PRECISION_SKIP_VERIFY=1" in cmd:

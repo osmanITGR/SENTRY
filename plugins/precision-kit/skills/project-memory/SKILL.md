@@ -24,6 +24,12 @@ it small, true and useful.
 Anything derivable in seconds from the code or README; long prose; file-by-
 file descriptions; temporary task notes; secrets; guesses.
 
+## Relation to the project vault
+The `project-vault` skill owns `docs/vault/*` and the router block between
+`<!-- vault:router:start/end -->` in CLAUDE.md: never edit that block by hand
+(`vault.py sync` rewrites it). Product facts go to the vault (PRD/STATE/TOKENS/STACK/SCHEMA/PLAN);
+CLAUDE.md keeps commands, conventions and gotchas.
+
 ## Procedure
 1. Read the existing CLAUDE.md (and AGENTS.md if present) fully.
 2. Verify each fact you add (run the command, open the file). Remove or fix

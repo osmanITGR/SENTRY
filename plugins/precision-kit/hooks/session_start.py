@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DETECT = ROOT / "skills" / "codebase-recon" / "scripts" / "detect_stack.py"
 FRESHNESS = ROOT / "skills" / "live-modernize" / "scripts" / "freshness_report.py"
 CODE_MAP = ROOT / "skills" / "code-map" / "scripts" / "code_map.py"
+VAULT = ROOT / "skills" / "project-vault" / "scripts" / "vault.py"
 DAY = 86400
 
 
@@ -91,6 +92,13 @@ def main() -> int:
     except Exception as exc:  # the map is an optimisation, never a blocker
         lines.append(f"[precision-kit code-map] skipped: {exc}")
     if det["projects"]:
+        try:
+            out = subprocess.run([sys.executable, str(VAULT), "status", str(cwd)], capture_output=True, text=True,
+                                 encoding="utf-8", errors="replace", timeout=60)
+            if out.stdout.strip():
+                lines.append(out.stdout.strip())
+        except Exception as exc:  # the vault reminder must never break a session
+            lines.append(f"[precision-kit vault] skipped: {exc}")
         try:
             line = freshness_line(cwd)
             if line:
