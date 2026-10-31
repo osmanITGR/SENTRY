@@ -1,12 +1,12 @@
 {
   "name": "precision-kit",
   "displayName": "Precision Kit",
-  "version": "2.2.0",
-  "description": "25 project-agnostic engineering skills (incremental code map for ranged reads, recon, live modernization against current registries/advisories, modern integration, legacy cleanup, testing, verification, debugging, security, CI, docs, performance, migrations, UI checks) plus hooks that keep the code map current, inject build/test commands at session start and block commits that leak secrets or fail checks.",
+  "version": "2.3.0",
+  "description": "26 project-agnostic engineering skills (incremental code map for ranged reads, works-on-every-machine portability checks with clean-room proof, recon, live modernization against current registries/advisories, modern integration, legacy cleanup, testing, verification, debugging, security, CI, docs, performance, migrations, UI checks) plus hooks that keep the code map current, inject build/test commands at session start and block commits that leak secrets or fail checks.",
   "author": {
     "name": "Lcpl Osman Gani"
   },
-  "repository": "https://github.com/osmanITGR/SENTRY",
+  "repository": "https://github.com/osmanITGR/precision-kit",
   "license": "MIT",
   "keywords": ["workflow", "testing", "verification", "refactoring", "dead-code", "secrets", "ci", "code-quality"],
   "userConfig": {

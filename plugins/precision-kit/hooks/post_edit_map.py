@@ -41,6 +41,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     try:
         sys.exit(main())
     except Exception as exc:  # never break an edit over the map

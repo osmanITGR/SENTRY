@@ -59,7 +59,7 @@ def http(url: str, data: dict | None = None, accept: str = "application/json"):
     fixture_path = os.environ.get("PRECISION_KIT_HTTP_FIXTURE")
     if fixture_path:
         if _FIXTURE is None:
-            _FIXTURE = json.loads(Path(fixture_path).read_text())
+            _FIXTURE = json.loads(Path(fixture_path).read_text(encoding="utf-8"))
         key = ("POST " if data is not None else "") + url
         if key not in _FIXTURE:
             raise OSError(f"unreachable (fixture has no {key})")
@@ -530,7 +530,7 @@ def build(repo: Path, only: set[str] | None, with_runtimes: bool) -> dict:
     with cf.ThreadPoolExecutor(12) as pool:
         list(pool.map(lookup, deps))
     vuln_sources = vulnerabilities(deps) if deps else {}
-    return {"repo": str(repo), "generated": NOW.isoformat(timespec="seconds"),
+    return {"repo": str(repo), "generated": NOW.isoformat(timespec="seconds"), "toml_skipped": tomllib is None,
             "deps": [asdict(d) for d in deps], "vuln_sources": vuln_sources,
             "runtimes": runtimes(repo) if with_runtimes else []}
 
@@ -559,7 +559,11 @@ def render(report: dict, min_age: int, summary: bool) -> tuple[str, int]:
             line += " -> run the live-modernize skill (security/deprecation first)."
         return line, (1 if sec or dep_ else 0)
 
-    L = [f"Live freshness report for {report['repo']} at {report['generated']} (sources queried now)",
+    L = [f"Live freshness report for {report['repo']} at {report['generated']} (sources queried now)"]
+    if report.get("toml_skipped"):
+        L.append("WARNING: Python < 3.11 has no tomllib: pyproject.toml, Cargo.toml and TOML lockfiles were "
+                 "NOT read. Run with Python 3.11+ for a complete report.")
+    L += [
          f"{len(deps)} direct dependencies"
          + (f" ({approx} from declared ranges, no lockfile: versions approximate)" if approx else "")]
     for eco, src in sorted(report["vuln_sources"].items()):
@@ -629,7 +633,7 @@ def main() -> int:
         report = build(repo, only, not args.no_runtimes)
         try:
             args.cache_dir.mkdir(parents=True, exist_ok=True)
-            cf_path.write_text(json.dumps(report))
+            cf_path.write_text(json.dumps(report), encoding="utf-8")
         except OSError:
             pass
     if args.json:
@@ -642,4 +646,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

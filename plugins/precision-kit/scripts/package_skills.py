@@ -19,9 +19,10 @@ from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = KIT / "skills"
-SHARED = {"detect_stack.py": SKILLS_DIR / "codebase-recon" / "scripts" / "detect_stack.py"}
+SHARED = {"detect_stack.py": SKILLS_DIR / "codebase-recon" / "scripts" / "detect_stack.py",
+          "verify.py": SKILLS_DIR / "verification-gate" / "scripts" / "verify.py"}
 NEEDS_SHARED = {"verification-gate": ["detect_stack.py"], "ci-setup": ["detect_stack.py"],
-                "live-modernize": ["detect_stack.py"]}
+                "live-modernize": ["detect_stack.py"], "portable-project": ["detect_stack.py", "verify.py"]}
 ALLOWED_KEYS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
 
 
@@ -59,4 +60,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

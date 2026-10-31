@@ -1,32 +1,39 @@
 # Precision Kit — সব প্রজেক্ট, সব ধরনের কাজের জন্য
 
-Claude-এর কাজ নিখুঁত, দ্রুত আর প্রমাণসহ করার জন্য **২৫টি skill + ৩টি hook**।
+Claude-এর কাজ নিখুঁত, দ্রুত আর প্রমাণসহ করার জন্য **২৬টি skill + ৩টি hook**।
 কোনো নির্দিষ্ট প্রজেক্টের জন্য বানানো নয়। Node, Python, Go, Rust, Flutter/Dart,
 Android/Gradle, Maven, .NET, PlatformIO/Arduino, Makefile — সব ধরনের প্রজেক্ট নিজে থেকেই চেনে, monorepo-ও।
+
+> **English:** A project-agnostic Claude Code plugin — 26 engineering skills (incremental code map
+> for ranged reads, works-on-every-machine portability checks with a clean-room proof, live modernization against current registries/advisories, verification gate,
+> secret scanning, legacy cleanup, testing, CI, docs, migrations, UI checks…) plus hooks that keep
+> the code map current, inject build/test commands at session start, and block commits that leak
+> secrets or fail checks. Install: `/plugin install precision-kit --marketplace osmanITGR/precision-kit`.
+> Python 3.11+ (standard library only) is required for the bundled scripts.
 
 ## ইন্সটল (যেকোনো একটা)
 
 **১. claude.ai account-এ — সব জায়গায় চলবে (web, desktop, mobile, cloud Claude Code)**
 ```bash
-python3 plugins/precision-kit/scripts/package_skills.py     # dist/-এ প্রতিটা skill-এর .zip তৈরি হবে
+python3 scripts/package_skills.py     # dist/-এ প্রতিটা skill-এর .zip তৈরি হবে
 ```
 তারপর claude.ai → Settings → Capabilities → Skills → প্রতিটা `.zip` আপলোড করুন।
 (এই পদ্ধতিতে শুধু skill যায়, hook যায় না।)
 
 **২. Claude Code plugin — skill + hook দুটোই (প্রস্তাবিত)**
 ```
-/plugin install precision-kit --marketplace osmanITGR/SENTRY
+/plugin install precision-kit --marketplace osmanITGR/precision-kit
 ```
-অথবা ধাপে ধাপে: `/plugin marketplace add osmanITGR/SENTRY` → `/plugin install precision-kit@precision-kit`
+অথবা ধাপে ধাপে: `/plugin marketplace add osmanITGR/precision-kit` → `/plugin install precision-kit@precision-kit`
 
 **৩. শুধু নিজের কম্পিউটারে, plugin ছাড়া**
 ```bash
-python3 plugins/precision-kit/scripts/install.py              # ~/.claude/skills — এই মেশিনের সব প্রজেক্ট
-python3 plugins/precision-kit/scripts/install.py --project .  # শুধু একটা প্রজেক্ট
+python3 scripts/install.py              # ~/.claude/skills — এই মেশিনের সব প্রজেক্ট
+python3 scripts/install.py --project .  # শুধু একটা প্রজেক্ট
 ```
 Windows-এ `python3`-এর জায়গায় `python` লিখুন।
 
-## ২৫টি Skill
+## ২৬টি Skill
 
 | ধরন | Skill | কাজ |
 |---|---|---|
@@ -50,6 +57,7 @@ Windows-এ `python3`-এর জায়গায় `python` লিখুন�
 | | `ui-verify` | স্ক্রিনশট নিয়ে UI যাচাই |
 | | `secret-scan` | পাসওয়ার্ড/key/token commit হওয়া আটকানো |
 | | `self-review` | commit-এর আগে নিজের diff রিভিউ |
+| | `portable-project` | আমার কম্পিউটারে চলে এমন প্রজেক্ট অন্যের কম্পিউটার/OS/ডিভাইসেও যেন একইভাবে চলে: কারণ খোঁজা আর clean-room-এ প্রমাণ |
 | ডেলিভারি | `git-delivery` | পরিচ্ছন্ন commit/push, সৎ রিপোর্ট |
 | | `pr-feedback` | রিভিউ কমেন্ট ও লাল CI ঠিক করা |
 | | `ci-setup` | GitHub Actions তৈরি/মেরামত |
@@ -82,11 +90,24 @@ Windows-এ `python3`-এর জায়গায় `python` লিখুন�
 | `secret-scan/scripts/scan_secrets.py` | secret ও sensitive ফাইল খোঁজা |
 | `ci-setup/scripts/gen_ci.py` | প্রজেক্টের কমান্ড থেকে CI workflow তৈরি |
 | `code-map/scripts/code_map.py` | প্রজেক্ট-মানচিত্র: `summary`, `find`, `show`, `refs`, `deps`, `note`, `stale` |
+| `portable-project/scripts/portability_audit.py` | "আমার কম্পিউটারে চলে" সমস্যার কারণ খোঁজা |
+| `portable-project/scripts/clean_room.py` | নতুন কপিতে global package ছাড়া ইন্সটল+টেস্ট, এই কম্পিউটারের সাথে তুলনা |
 | `live-modernize/scripts/freshness_report.py` | dependency ও runtime-কে **live** registry/advisory-র সাথে তুলনা |
 | `live-modernize/scripts/find_deprecations.py` | চলমান কোডে deprecated API-র file:line আর বিকল্প |
 
+## Environment variables
+
+| Variable | Set by | Meaning |
+|---|---|---|
+| `CLAUDE_PLUGIN_DATA` | Claude Code | Persistent data folder of the plugin (freshness cache); falls back to `~/.cache/precision-kit` |
+| `CLAUDE_PROJECT_DIR` | Claude Code | Project root passed to hooks |
+| `CLAUDE_PLUGIN_OPTION_VERIFY_ON_COMMIT` | `/plugin configure` | `false` disables running checks before `git commit` (secret scan always runs) |
+| `CLAUDE_PLUGIN_OPTION_FRESHNESS_ON_START` | `/plugin configure` | `false` disables the session-start freshness line |
+| `PRECISION_SKIP_VERIFY=1` | you, inside a commit command | skip checks once for proven pre-existing failures |
+| `PRECISION_KIT_HTTP_FIXTURE` | tests only | JSON file that replaces live registry responses (offline selftest) |
+
 ## উন্নয়ন
 
-এই kit-এ কিছু বদলালে চালান: `python3 plugins/precision-kit/scripts/selftest.py`
+এই kit-এ কিছু বদলালে চালান: `python3 scripts/selftest.py`
 (২০০+ assertion, সব script ও hook আসল fixture repo-তে চালিয়ে দেখে) এবং
-`claude plugin validate plugins/precision-kit`।
+`claude plugin validate .`।

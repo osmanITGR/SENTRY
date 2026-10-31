@@ -18,6 +18,8 @@ One job per detected project with toolchain setup (version from `.nvmrc`,
 `concurrency` cancel-in-progress and a timeout. Projects that need manual
 setup (e.g. embedded boards needing an FQBN) are listed as comments.
 An existing workflow is never overwritten without `--force`: merge by hand.
+Add `--os ubuntu-latest,windows-latest,macos-latest` for a cross-OS matrix
+(commands run in bash on every OS) when users are on several platforms (`portable-project`).
 
 ## 2. Review before committing
 - **Action versions**: the generator pins known majors. Check each action's

@@ -1,6 +1,6 @@
 ---
 name: precision-workflow
-description: Master workflow for ANY software task in any project - feature, bug fix, refactor, cleanup, upgrade, live modernization, new project, CI, docs, performance, migration, UI change, PR feedback, or a question about code. Use it at the start of every such task, even small ones, before touching a file. It routes to the specialised precision-kit skills and defines the gates a change must pass before it is called done.
+description: Master workflow for ANY software task in any project - feature, bug fix, refactor, cleanup, upgrade, live modernization, portability, new project, CI, docs, performance, migration, UI change, PR feedback, or a question about code. Use it at the start of every such task, even small ones, before touching a file. It routes to the specialised precision-kit skills and defines the gates a change must pass before it is called done.
 ---
 
 # Precision Workflow
@@ -19,6 +19,7 @@ gate: a one-line fix still gets located precisely, verified and self-reviewed.
 | Refactor / rename / move | `safe-refactor` -> `legacy-cleanup` |
 | Remove old code | `legacy-cleanup` |
 | Dependency / SDK / toolchain | `dependency-upgrade` |
+| "Works on my machine", sharing/handing over/deploying, onboarding | `portable-project` -> `ci-setup` |
 | "Is it up to date?", maintenance, outdated/vulnerable deps, deprecated APIs | `live-modernize` -> `dependency-upgrade` |
 | Brand-new project or package | `new-project-bootstrap` -> `ci-setup` |
 | Slow / heavy | `performance-optimize` |

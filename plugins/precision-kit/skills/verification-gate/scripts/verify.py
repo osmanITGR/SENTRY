@@ -41,13 +41,13 @@ def changed_files(repo: Path) -> list[str]:
     files: set[str] = set()
     for args in (["git", "diff", "--name-only", "HEAD"],
                  ["git", "ls-files", "--others", "--exclude-standard"]):
-        out = subprocess.run(args, cwd=repo, capture_output=True, text=True)
+        out = subprocess.run(args, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace")
         files.update(l for l in out.stdout.splitlines() if l)
     base = subprocess.run(["git", "merge-base", "HEAD", "origin/HEAD"], cwd=repo,
-                          capture_output=True, text=True).stdout.strip()
+                          capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     if base:
         out = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], cwd=repo,
-                             capture_output=True, text=True)
+                             capture_output=True, text=True, encoding="utf-8", errors="replace")
         files.update(l for l in out.stdout.splitlines() if l)
     return sorted(files)
 
@@ -76,10 +76,17 @@ def missing_python_module(cmd: str, cwd: Path) -> str | None:
     return None if probe.returncode == 0 else mod
 
 
+def tool_available(tool: str, cwd: Path) -> bool:
+    """Bare names are looked up on PATH; paths (./gradlew, .venv/bin/python) relative to the project."""
+    if "/" in tool or "\\" in tool:
+        return (cwd / tool).exists() or Path(tool).exists()
+    return shutil.which(tool) is not None
+
+
 def run(cmd: str, cwd: Path, timeout: int) -> tuple[int, str, float]:
     start = time.monotonic()
     try:
-        proc = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True,
+        proc = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace",
                               timeout=timeout)
         out = (proc.stdout or "") + (proc.stderr or "")
         return proc.returncode, out, time.monotonic() - start
@@ -148,8 +155,7 @@ def main() -> int:
                 results.append((label, "SKIP", f"needs a parameter: {cmd}", 0.0, ""))
                 continue
             tool = first_tool(cmd)
-            if tool and tool not in ("test", "true") and not tool.startswith("./") \
-                    and not shutil.which(tool):
+            if tool and tool not in ("test", "true") and not tool_available(tool, cwd):
                 results.append((label, "SKIP", f"`{tool}` not installed", 0.0, ""))
                 continue
             mod = missing_python_module(cmd, cwd)
@@ -188,4 +194,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

@@ -117,15 +117,21 @@ def for_ci(cmd: str) -> str:
     return re.sub(r"^\S*(?:\.venv|venv)[/\\]\S*python(?:\.exe)? -m ", "python -m ", cmd)
 
 
-def job(p: dict, repo: Path) -> str | None:
+def job(p: dict, repo: Path, oses: list[str] | None = None) -> str | None:
     cmds = {k: for_ci(v) for k, v in p["commands"].items() if "<" not in v}
     if not cmds:
         return None
     jid = re.sub(r"[^A-Za-z0-9_-]", "-", (p["root"] if p["root"] != "." else "root")) + f"-{p['stack']}"
     lines = [f"  {jid}:", f"    name: {q(p['root'] + ' (' + p['stack'] + ')')}",
-             "    runs-on: ubuntu-latest", "    timeout-minutes: 30"]
-    if p["root"] != ".":
-        lines += ["    defaults:", "      run:", f"        working-directory: {p['root']}"]
+             "    runs-on: ${{ matrix.os }}" if oses else "    runs-on: ubuntu-latest", "    timeout-minutes: 30"]
+    if oses:
+        lines += ["    strategy:", "      fail-fast: false", "      matrix:", f"        os: [{', '.join(oses)}]"]
+    if p["root"] != "." or oses:
+        lines += ["    defaults:", "      run:"]
+        if oses:
+            lines.append("        shell: bash  # same commands on Windows (Git Bash), macOS and Linux")
+        if p["root"] != ".":
+            lines.append(f"        working-directory: {p['root']}")
     lines += ["    steps:", f"      - uses: {ACTIONS['checkout']}"]
     lines += setup_steps(p, repo)
     if p["stack"] == "android-gradle" and (repo / p["root"] / "gradlew").exists():
@@ -143,10 +149,13 @@ def main() -> int:
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--output", default=".github/workflows/ci.yml")
+    ap.add_argument("--os", help="comma list of runners for a cross-OS matrix, e.g. "
+                                 "ubuntu-latest,windows-latest,macos-latest")
     args = ap.parse_args()
     repo = Path(args.repo).resolve()
     det = load_detect().detect(repo)
-    jobs = [j for j in (job(p, repo) for p in det["projects"]) if j]
+    oses = [o.strip() for o in args.os.split(",") if o.strip()] if args.os else None
+    jobs = [j for j in (job(p, repo, oses) for p in det["projects"]) if j]
     skipped = [p["root"] + f" ({p['stack']})" for p in det["projects"]
                if not job(p, repo)]
     if not jobs:
@@ -170,10 +179,13 @@ def main() -> int:
         print(yaml, end="")
         return 1
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(yaml)
+    out.write_text(yaml, encoding="utf-8")
     print(f"wrote {args.output} ({len(jobs)} job(s))")
     return 0
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

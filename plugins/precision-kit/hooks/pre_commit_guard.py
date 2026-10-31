@@ -57,7 +57,7 @@ def main() -> int:
             ["git", "rev-parse", "--git-dir"], cwd=repo, capture_output=True).returncode != 0:
         return 0
 
-    scan = subprocess.run([sys.executable, str(SCAN), str(repo)], capture_output=True, text=True)
+    scan = subprocess.run([sys.executable, str(SCAN), str(repo)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if scan.returncode == 1:
         print("precision-kit blocked this commit: possible secrets in the changes.\n"
               f"{tail(scan.stdout)}\n"
@@ -69,7 +69,7 @@ def main() -> int:
     if option in ("false", "0", "no", "off") or "PRECISION_SKIP_VERIFY=1" in cmd:
         return 0
     ver = subprocess.run([sys.executable, str(VERIFY), str(repo), "--changed", "--timeout", "600"],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
     if ver.returncode == 1:
         print("precision-kit blocked this commit: checks failed for the changed project(s).\n"
               f"{tail(ver.stdout, 60)}\n"
@@ -89,6 +89,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     try:
         sys.exit(main())
     except Exception as exc:  # a broken guard must not block work silently

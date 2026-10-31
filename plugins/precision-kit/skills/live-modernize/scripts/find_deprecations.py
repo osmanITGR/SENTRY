@@ -92,12 +92,13 @@ def main() -> int:
             cmds.append("staticcheck -checks SA1019 ./...")
         for cmd in cmds:
             tool = cmd.split()[0]
-            if "<" in cmd or (not tool.startswith("./") and tool != "test" and not shutil.which(tool)):
+            path_like = "/" in tool or "\\" in tool
+            if "<" in cmd or (tool != "test" and not ((cwd / tool).exists() if path_like else shutil.which(tool))):
                 skipped.append(f"{p['root']}: {cmd}")
                 continue
             ran.append(f"{p['root']}: {cmd}")
             try:
-                out = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True,
+                out = subprocess.run(cmd, cwd=cwd, shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace",
                                      timeout=args.timeout, env=env)
                 text = (out.stdout or "") + (out.stderr or "")
             except subprocess.TimeoutExpired:
@@ -138,4 +139,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

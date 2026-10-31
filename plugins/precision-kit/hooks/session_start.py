@@ -43,7 +43,7 @@ def freshness_line(cwd: Path) -> str | None:
     if not cache.exists():
         return "[precision-kit freshness] live check running in background; summary appears next session."
     out = subprocess.run([sys.executable, str(FRESHNESS), str(cwd), "--summary", "--cache-only",
-                          "--cache-dir", str(cache_dir)], capture_output=True, text=True, timeout=20)
+                          "--cache-dir", str(cache_dir)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20)
     return out.stdout.strip() or None
 
 
@@ -102,6 +102,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     try:
         sys.exit(main())
     except Exception as exc:  # a context hint must never break a session

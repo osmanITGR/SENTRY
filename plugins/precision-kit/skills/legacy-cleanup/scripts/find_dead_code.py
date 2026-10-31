@@ -86,7 +86,7 @@ CODEISH_RE = re.compile(r"[;{}]\s*$|^\s*(if|for|while|return|def|function|const|
 
 def git_files(repo: Path, sub: str | None) -> list[Path]:
     args = ["git", "ls-files", "-co", "--exclude-standard"] + ([sub] if sub else [])
-    out = subprocess.run(args, cwd=repo, capture_output=True, text=True)
+    out = subprocess.run(args, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if out.returncode != 0:
         sys.exit("Not a git repository (needed to respect .gitignore).")
     return [repo / l for l in out.stdout.splitlines() if l]
@@ -213,7 +213,7 @@ def main() -> int:
                     ran = True
                     print(f"$ ({root.relative_to(repo)}) npx --no-install {tool}")
                     out = subprocess.run(["npx", "--no-install", tool], cwd=root,
-                                         capture_output=True, text=True, timeout=600)
+                                         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
                     print("\n".join((out.stdout + out.stderr).splitlines()[:80]))
                     break
         if any(f.suffix == ".py" for f in scope) and shutil.which("vulture"):
@@ -222,7 +222,7 @@ def main() -> int:
             print(f"$ vulture {target} --min-confidence 80")
             out = subprocess.run(["vulture", target, "--min-confidence", "80",
                                   "--exclude", ".venv,venv,node_modules"],
-                                 cwd=repo, capture_output=True, text=True)
+                                 cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace")
             print("\n".join(out.stdout.splitlines()[:80]))
         if (repo / "go.mod").exists():
             for tool, cmd in (("deadcode", ["deadcode", "./..."]),
@@ -230,7 +230,7 @@ def main() -> int:
                 if shutil.which(tool):
                     ran = True
                     print("$ " + " ".join(cmd))
-                    out = subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
+                    out = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace")
                     print("\n".join((out.stdout + out.stderr).splitlines()[:80]))
                     break
         if not ran:
@@ -243,4 +243,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

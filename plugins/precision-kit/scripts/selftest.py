@@ -3,7 +3,7 @@
 manifests, then exercises every bundled script and hook against throwaway
 fixture repositories.
 
-Usage: python3 plugins/precision-kit/scripts/selftest.py
+Usage: python3 scripts/selftest.py
 Exit 0 when every assertion holds.
 """
 from __future__ import annotations
@@ -33,6 +33,8 @@ FRESH = SKILLS / "live-modernize/scripts/freshness_report.py"
 DEPREC = SKILLS / "live-modernize/scripts/find_deprecations.py"
 CODE_MAP = SKILLS / "code-map/scripts/code_map.py"
 POST_EDIT = KIT / "hooks/post_edit_map.py"
+AUDIT = SKILLS / "portable-project/scripts/portability_audit.py"
+CLEAN_ROOM = SKILLS / "portable-project/scripts/clean_room.py"
 failures: list[str] = []
 
 
@@ -65,10 +67,11 @@ def validate_skills() -> None:
         for ref in set(re.findall(r"`([a-z]+(?:-[a-z]+)+)` skill", skill_md.read_text(encoding="utf-8"))):
             check(ref in names or ref in ("security-review",),
                   f"{skill_md.parent.name}: referenced skill `{ref}` exists")
-    for manifest in (KIT / ".claude-plugin/plugin.json", KIT.parents[1] / ".claude-plugin/marketplace.json",
+    for manifest in (KIT / ".claude-plugin/plugin.json", next((m for m in (KIT / ".claude-plugin/marketplace.json", KIT.parents[1] / ".claude-plugin/marketplace.json")
+                           if m.exists()), KIT / ".claude-plugin/marketplace.json"),
                      KIT / "hooks/hooks.json"):
         try:
-            json.loads(manifest.read_text())
+            json.loads(manifest.read_text(encoding="utf-8"))
             check(True, f"{manifest.name} is valid JSON")
         except (OSError, json.JSONDecodeError) as e:
             check(False, f"{manifest.name} is valid JSON ({e})")
@@ -77,7 +80,7 @@ def validate_skills() -> None:
 def write(root: Path, rel: str, content: str) -> None:
     p = root / rel
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(content)
+    p.write_text(content, encoding="utf-8")
 
 
 def build_fixture(root: Path) -> None:
@@ -104,7 +107,7 @@ def build_fixture(root: Path) -> None:
 
 def run(script: Path, *args: str, cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(script), *args], cwd=cwd,
-                          capture_output=True, text=True, timeout=600)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
 
 
 def test_scripts() -> None:
@@ -133,7 +136,7 @@ def test_scripts() -> None:
         check("api:test" not in v.stdout, "verify: --changed scopes to touched project")
         (root / "web/test/b.test.js").unlink()
         status = subprocess.run(["git", "status", "--porcelain"], cwd=root,
-                                capture_output=True, text=True).stdout
+                                capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
         check(status.strip() == "", f"verify: leaves no artifacts ({status.strip()!r})")
 
         d = run(DEAD, ".", "--no-tools", cwd=root).stdout
@@ -162,7 +165,7 @@ def test_secret_scan() -> None:
               'token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789AB"\n'  # secret-scan: allow (fake fixture)
               'url = "postgres://admin:S3cr3tPass@db.example.com/app"\n'  # secret-scan: allow (fake fixture)
               'connect("user", "realpass123")\n'  # secret-scan: allow (fake fixture)
-              'db = os.environ["DB_PASSWORD"]\n'
+              'db = os.environ["DB_PASSWORD"]\n'  # portability: allow (fixture)
               'api_key = "changeme"\n'
               'k = "your-api-key-here"\n'
               'u = "postgres://user:${DB_PASS}@db/app"\n'
@@ -216,7 +219,7 @@ def test_ci_and_packaging() -> None:
 
 def hook(script: Path, payload: dict, cwd: Path, env: dict | None = None):
     return subprocess.run([sys.executable, str(script)], input=json.dumps(payload), cwd=cwd,
-                          capture_output=True, text=True, timeout=600,
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600,
                           env={**os.environ, **(env or {})})
 
 
@@ -297,10 +300,10 @@ def test_live_modernize() -> None:
                 "v0.0.1-go1.27.3.linux-amd64\nv0.0.1-go1.28rc1.linux-amd64\n",
         }
         fixture = root / "fixture.json"
-        fixture.write_text(json.dumps(fx))
+        fixture.write_text(json.dumps(fx), encoding="utf-8")
         env = {**os.environ, "PRECISION_KIT_HTTP_FIXTURE": str(fixture), "CLAUDE_PLUGIN_DATA": str(root / "data")}
         rep = subprocess.run([sys.executable, str(FRESH), str(root), "--cache-dir", str(root / "c")],
-                             capture_output=True, text=True, env=env, timeout=120)
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=120)
         o = rep.stdout
         sect = lambda title: o.split("## " + title, 1)[1].split("\n##", 1)[0] if "## " + title in o else ""
         sec = sect("SECURITY")
@@ -320,18 +323,18 @@ def test_live_modernize() -> None:
         check("osv.dev" in o and "unavailable" in o, "freshness: advisory source status reported honestly")
         check("left-pad" not in o, "freshness: up-to-date deps not listed")
         summ = subprocess.run([sys.executable, str(FRESH), str(root), "--summary", "--cache-dir", str(root / "c"),
-                               "--cache-ttl", "600"], capture_output=True, text=True, env=env).stdout
+                               "--cache-ttl", "600"], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env).stdout
         check(re.search(r"2 security, 1 deprecated, 2 runtime", summ) is not None, f"freshness: summary line ({summ.strip()[:90]})")
 
         hook_env = {k: v for k, v in env.items()}
         first = subprocess.run([sys.executable, str(SESSION)], input=json.dumps({"cwd": str(root)}),
-                               capture_output=True, text=True, env=hook_env, timeout=60)
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", env=hook_env, timeout=60)
         check("running in background" in first.stdout, "session hook: first run refreshes in background")
         deadline = time.time() + 60
         while time.time() < deadline and not list((root / "data").glob("freshness-*.json")):
             time.sleep(0.5)
         second = subprocess.run([sys.executable, str(SESSION)], input=json.dumps({"cwd": str(root)}),
-                                capture_output=True, text=True, env=hook_env, timeout=60)
+                                capture_output=True, text=True, encoding="utf-8", errors="replace", env=hook_env, timeout=60)
         check("2 security" in second.stdout, "session hook: next session shows cached freshness summary")
 
     if sys.version_info >= (3, 12):  # datetime.utcnow() is deprecated from 3.12
@@ -372,7 +375,7 @@ def test_code_map() -> None:
         write(root, "dist/bundle.min.js", "x")
         git_commit_all(root)
         cm = lambda *a: subprocess.run([sys.executable, str(CODE_MAP), "--repo", str(root), *a],
-                                       capture_output=True, text=True, timeout=120)
+                                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
 
         b = cm("build")
         check(b.returncode == 0 and "added" in b.stdout, "code-map: build")
@@ -397,7 +400,7 @@ def test_code_map() -> None:
         check("in Hud:3-6" in r and "DEF in makeClient" in r, "code-map: refs show enclosing symbol and definition")
         d = cm("deps", "web/src/util/retry.ts", "--depth", "2").stdout
         check("web/src/net/client.ts" in d and "web/src/ui/Hud.tsx" in d, "code-map: transitive reverse deps")
-        gi = (root / ".claude/code-map/.gitignore").read_text()
+        gi = (root / ".claude/code-map/.gitignore").read_text(encoding="utf-8")
         check("index.json" in gi and "MAP.md" in gi and "notes" not in gi.split("\n", 1)[1],
               "code-map: generated files gitignored, notes committed")
 
@@ -405,14 +408,20 @@ def test_code_map() -> None:
         cm("note", "web/src/", "Frontend")
         check("Command API client" in cm("summary").stdout and "## web/src/ - Frontend" in cm("summary").stdout,
               "code-map: notes appear in summary")
+        legacy = {**os.environ, "LC_ALL": "POSIX", "PYTHONCOERCECLOCALE": "0", "PYTHONUTF8": "0"}
+        bn = subprocess.run([sys.executable, str(CODE_MAP), "--repo", str(root), "note", "api/store.py",
+                             "সংরক্ষণ মডিউল"], capture_output=True, env=legacy)
+        saved = json.loads((root / ".claude/code-map/notes.json").read_text(encoding="utf-8")).get("api/store.py", {})
+        check(bn.returncode == 0 and saved.get("text") == "সংরক্ষণ মডিউল",
+              "code-map: non-ASCII note survives a legacy (non-UTF-8) locale")
         p = root / "web/src/net/client.ts"
-        p.write_text(p.read_text().replace("return true", "return false"))
+        p.write_text(p.read_text(encoding="utf-8").replace("return true", "return false"))
         out = cm("stale")
         check("1 changed" in out.stderr and "all notes current" in out.stdout,
               "code-map: body edit re-indexes 1 file, note stays current")
-        p.write_text(p.read_text() + "\nexport function extra() {}\n")
+        p.write_text(p.read_text(encoding="utf-8") + "\nexport function extra() {}\n")
         hook_out = subprocess.run([sys.executable, str(POST_EDIT)], input=json.dumps(
-            {"tool_name": "Edit", "tool_input": {"file_path": str(p)}}), capture_output=True, text=True).stdout
+            {"tool_name": "Edit", "tool_input": {"file_path": str(p)}}), capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
         check("stale" in hook_out and "web/src/net/client.ts" in hook_out, "post-edit hook: stale note reminder")
         check("STALE   web/src/net/client.ts" in cm("stale").stdout, "code-map: shape change marks note stale")
         (root / "api/store.py").unlink()
@@ -438,7 +447,105 @@ def test_code_map() -> None:
         check(build_s < 20 and query_s < 3, f"code-map: 400 files build {build_s:.1f}s, query {query_s:.2f}s")
 
 
+def test_portable_project() -> None:
+    commit = lambda root: git_commit_all(root)
+    with tempfile.TemporaryDirectory() as tmp:  # every classic "works on my machine" cause
+        root = Path(tmp)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        write(root, "web/package.json", json.dumps({"name": "w", "scripts": {"build": "tsc -p ."}, "dependencies": {}}))
+        write(root, "web/src/utils/Format.js", "module.exports = {}\n")
+        write(root, "web/src/index.js", "require('./utils/format')\nrequire('../config/local.json')\n"
+              "const u = process.env.API_URL\n")  # portability: allow (fixture)
+        write(root, "web/config/local.json", "{}")
+        write(root, "web/.gitignore", "config/local.json\n")
+        write(root, "api/requirements.txt", "requests>=2.0\n")
+        write(root, "api/settings.py", 'import yaml\nDATA = "/home/osman/data/"\n\ndef load():\n'  # portability: allow (deliberate fixture)
+              '    with open("s.yaml") as f:\n        return yaml.safe_load(f)\n')  # portability: allow (deliberate fixture)
+        (root / "scripts").mkdir()
+        (root / "scripts/deploy.sh").write_bytes(b"#!/bin/sh\r\necho hi\r\n")
+        commit(root)
+        out = run(AUDIT, str(root), "--json", cwd=root)
+        f = json.loads(out.stdout)["findings"]
+        has = lambda kind, text: any(x["kind"] == kind and text in (x["problem"] + x["where"]) for x in f)
+        check(out.returncode == 1, "portability: HIGH findings -> exit 1")
+        check(has("undeclared", "`tsc`"), "portability: script binary from a global install")
+        check(has("undeclared", "`pyyaml`"), "portability: python import not declared (import->dist mapping)")
+        check(has("case", "./utils/format"), "portability: import letter-case mismatch")
+        check(has("local-only", "web/config/local.json"), "portability: file that exists only on this machine")
+        check(has("abs-path", "/home/osman/"), "portability: machine-specific absolute path")  # portability: allow (deliberate fixture)
+        check(has("line-endings", "CRLF"), "portability: CRLF shell script")
+        check(has("line-endings", ".gitattributes"), "portability: missing .gitattributes")
+        check(has("exec-bit", "scripts/deploy.sh"), "portability: missing executable bit")
+        check(has("env", "API_URL"), "portability: undocumented env var")
+        check(has("lockfile", "requests>=2.0"), "portability: unpinned requirement")
+        check(has("toolchain", "Node.js") and has("toolchain", "Python"), "portability: unpinned runtimes")
+        check(has("encoding", "settings.py:5"), "portability: open() without encoding")
+
+    with tempfile.TemporaryDirectory() as tmp:  # a portable project yields no HIGH/MEDIUM noise
+        root = Path(tmp)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        write(root, ".nvmrc", "22\n")
+        write(root, ".python-version", "3.12\n")
+        write(root, ".gitattributes", "* text=auto\n*.sh text eol=lf\n")
+        write(root, ".env.example", "API_URL=\n")
+        write(root, "web/package.json", json.dumps({"name": "w", "engines": {"node": ">=22"},
+                                                    "scripts": {"test": "node --test"}, "dependencies": {}}))
+        write(root, "web/package-lock.json", json.dumps({"name": "w", "lockfileVersion": 3,
+                                                         "packages": {"": {"name": "w"}}}))
+        write(root, "web/src/index.js", "const path = require('node:path')\nconst u = process.env.API_URL\n")  # portability: allow (fixture)
+        write(root, "api/requirements.txt", "requests==2.32.4\n")
+        write(root, "api/app.py", "import json\nimport requests\n\nDATA = 'data/x.json'\n")
+        write(root, "scripts/run.sh", "#!/bin/sh\necho ok\n")
+        commit(root)
+        subprocess.run(["git", "update-index", "--chmod=+x", "scripts/run.sh"], cwd=root, check=True)
+        out = run(AUDIT, str(root), "--json", "--min-severity", "medium", cwd=root)
+        f = json.loads(out.stdout)["findings"]
+        check(out.returncode == 0 and not f, f"portability: clean project has no HIGH/MEDIUM findings ({[x['problem'] for x in f][:3]})")
+
+    with tempfile.TemporaryDirectory() as tmp:  # clean room exposes a package that is only installed "globally"
+        root = Path(tmp)
+        glob_dir = root / "global-site"
+        write(glob_dir, "globalonly_pkg.py", "VALUE = 42\n")
+        repo = root / "repo"
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        write(repo, "api/requirements.txt", "")
+        write(repo, "api/calc.py", "import globalonly_pkg\n\ndef value():\n    return globalonly_pkg.VALUE\n")
+        write(repo, "api/tests/__init__.py", "")
+        write(repo, "api/tests/test_calc.py", "import os, sys, unittest\n"
+              "sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))\nimport calc\n\n"
+              "class T(unittest.TestCase):\n    def test_v(self):\n        self.assertEqual(calc.value(), 42)\n")
+        commit(repo)
+        env = {**os.environ, "PYTHONPATH": str(glob_dir)}
+        out = subprocess.run([sys.executable, str(CLEAN_ROOM), str(repo), "--compare", "--only", "install,test",
+                              "--reuse-caches"], cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=600)
+        check(out.returncode == 1 and re.search(r"api:test\s+here=PASS\s+clean-room=FAIL\s+PORTABILITY BUG", out.stdout)
+              is not None, "clean room: global-only package flagged as PORTABILITY BUG")
+        check("No module named 'globalonly_pkg'" in out.stdout, "clean room: shows the real failure")
+        write(repo, "api/globalonly_pkg.py", "VALUE = 42\n")
+        commit(repo)
+        out = subprocess.run([sys.executable, str(CLEAN_ROOM), str(repo), "--compare", "--only", "install,test",
+                              "--reuse-caches"], cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=600)
+        check(out.returncode == 0 and "identical results" in out.stdout, "clean room: fixed project passes everywhere")
+        write(repo, "api/new_mod.py", "X = 1\n")
+        out = subprocess.run([sys.executable, str(CLEAN_ROOM), str(repo), "--only", "install", "--reuse-caches",
+                              "--include-uncommitted"], cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=600)
+        check(re.search(r"[1-9]\d* new file\(s\) copied", out.stdout) is not None and "PASS  api:install" in out.stdout,
+              "clean room: --include-uncommitted carries new files")
+        check(not list(Path(tempfile.gettempdir()).glob("clean-room-*/src/api/new_mod.py")),
+              "clean room: temporary copy removed afterwards")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        build_fixture(root)
+        y = run(GEN_CI, ".", "--os", "ubuntu-latest,windows-latest,macos-latest", cwd=root).stdout
+        check("runs-on: ${{ matrix.os }}" in y and "os: [ubuntu-latest, windows-latest, macos-latest]" in y
+              and "shell: bash" in y, "gen_ci: cross-OS matrix with bash on every runner")
+
+
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 output even on legacy Windows consoles
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     validate_skills()
     test_scripts()
     test_secret_scan()
@@ -446,5 +553,6 @@ if __name__ == "__main__":
     test_hooks()
     test_live_modernize()
     test_code_map()
+    test_portable_project()
     print(f"\n{'ALL PASSED' if not failures else f'{len(failures)} FAILED'}")
     sys.exit(1 if failures else 0)
