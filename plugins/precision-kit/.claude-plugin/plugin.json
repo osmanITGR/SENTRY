@@ -1,0 +1,20 @@
+{
+  "name": "precision-kit",
+  "displayName": "Precision Kit",
+  "version": "2.0.0",
+  "description": "23 project-agnostic engineering skills (recon, modern integration, legacy cleanup, testing, verification, debugging, security, CI, docs, performance, migrations, UI checks) plus hooks that inject build/test commands at session start and block commits that leak secrets or fail checks.",
+  "author": {
+    "name": "Lcpl Osman Gani"
+  },
+  "repository": "https://github.com/osmanITGR/SENTRY",
+  "license": "MIT",
+  "keywords": ["workflow", "testing", "verification", "refactoring", "dead-code", "secrets", "ci", "code-quality"],
+  "userConfig": {
+    "verify_on_commit": {
+      "type": "boolean",
+      "title": "Verify on commit",
+      "description": "Run the project's lint/typecheck/build/test for changed projects before every git commit and block on failures. Secret scanning always runs.",
+      "default": true
+    }
+  }
+}
