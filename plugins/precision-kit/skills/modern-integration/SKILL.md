@@ -21,6 +21,9 @@ Read the lockfile/manifest, not your memory:
 | .NET | `*.csproj` `TargetFramework`, `Directory.Packages.props` |
 | Embedded (Arduino/ESP/STM32) | `platformio.ini` / board core version |
 
+To check the whole repository against what is current right now (live
+registries, advisories, deprecations), use the `live-modernize` skill.
+
 ## 2. Verify every API you call
 - Installed source beats memory: read the type definitions/docstrings in
   `node_modules/<pkg>/*.d.ts`, site-packages, `~/.pub-cache`, `$GOPATH/pkg/mod`,

@@ -20,7 +20,8 @@ from pathlib import Path
 KIT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = KIT / "skills"
 SHARED = {"detect_stack.py": SKILLS_DIR / "codebase-recon" / "scripts" / "detect_stack.py"}
-NEEDS_SHARED = {"verification-gate": ["detect_stack.py"], "ci-setup": ["detect_stack.py"]}
+NEEDS_SHARED = {"verification-gate": ["detect_stack.py"], "ci-setup": ["detect_stack.py"],
+                "live-modernize": ["detect_stack.py"]}
 ALLOWED_KEYS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
 
 

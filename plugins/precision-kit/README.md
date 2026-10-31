@@ -1,6 +1,6 @@
 # Precision Kit — সব প্রজেক্ট, সব ধরনের কাজের জন্য
 
-Claude-এর কাজ নিখুঁত, দ্রুত আর প্রমাণসহ করার জন্য **২৩টি skill + ২টি hook**।
+Claude-এর কাজ নিখুঁত, দ্রুত আর প্রমাণসহ করার জন্য **২৪টি skill + ২টি hook**।
 কোনো নির্দিষ্ট প্রজেক্টের জন্য বানানো নয়। Node, Python, Go, Rust, Flutter/Dart,
 Android/Gradle, Maven, .NET, PlatformIO/Arduino, Makefile — সব ধরনের প্রজেক্ট নিজে থেকেই চেনে, monorepo-ও।
 
@@ -26,7 +26,7 @@ python3 plugins/precision-kit/scripts/install.py --project .  # শুধু এ
 ```
 Windows-এ `python3`-এর জায়গায় `python` লিখুন।
 
-## ২৩টি Skill
+## ২৪টি Skill
 
 | ধরন | Skill | কাজ |
 |---|---|---|
@@ -39,6 +39,7 @@ Windows-এ `python3`-এর জায়গায় `python` লিখুন�
 | | `new-project-bootstrap` | নতুন প্রজেক্ট শুরু থেকেই lint/test/CI সহ |
 | | `database-migration` | ডেটা না হারিয়ে schema পরিবর্তন |
 | | `dependency-upgrade` | changelog পড়ে নিরাপদ আপগ্রেড |
+| | `live-modernize` | **এই মুহূর্তের** registry, নিরাপত্তা-তথ্য আর deprecation-এর সাথে চলমান কোড মিলিয়ে প্রমাণসহ ভালো হলে replace |
 | উন্নতি | `safe-refactor` | আচরণ না বদলে কাঠামো পরিবর্তন |
 | | `legacy-cleanup` | পুরাতন/অব্যবহৃত কোড প্রমাণসহ মোছা |
 | | `performance-optimize` | মেপে মেপে গতি বাড়ানো |
@@ -56,7 +57,11 @@ Windows-এ `python3`-এর জায়গায় `python` লিখুন�
 
 ## Hooks (plugin ইন্সটলে স্বয়ংক্রিয়)
 
-- **Session শুরু:** repo-র stack আর আসল lint/test/build কমান্ড Claude-কে আগেই জানিয়ে দেয়।
+- **Session শুরু:**
+  - repo-র stack আর আসল lint/test/build কমান্ড Claude-কে আগেই জানিয়ে দেয়।
+  - সাথে live freshness সারাংশ দেখায় (কতগুলো নিরাপত্তা-ত্রুটি, deprecated আর পুরাতন ভার্সন)।
+  - এই তথ্য দিনে একবার background-এ নতুন করে আনা হয়, তাই session শুরু ধীর হয় না।
+  - বন্ধ করা যায় `freshness_on_start` অপশন দিয়ে।
 - **`git commit`-এর আগে:**
   - secret পাওয়া গেলে commit **আটকে দেয়**।
   - পরিবর্তিত প্রজেক্টের চেক FAIL করলে commit **আটকে দেয়**।
@@ -72,6 +77,8 @@ Windows-এ `python3`-এর জায়গায় `python` লিখুন�
 | `legacy-cleanup/scripts/find_dead_code.py` | অব্যবহৃত symbol/ফাইল, deprecated, comment-করা কোড |
 | `secret-scan/scripts/scan_secrets.py` | secret ও sensitive ফাইল খোঁজা |
 | `ci-setup/scripts/gen_ci.py` | প্রজেক্টের কমান্ড থেকে CI workflow তৈরি |
+| `live-modernize/scripts/freshness_report.py` | dependency ও runtime-কে **live** registry/advisory-র সাথে তুলনা |
+| `live-modernize/scripts/find_deprecations.py` | চলমান কোডে deprecated API-র file:line আর বিকল্প |
 
 ## উন্নয়ন
 

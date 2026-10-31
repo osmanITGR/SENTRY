@@ -1,8 +1,8 @@
 {
   "name": "precision-kit",
   "displayName": "Precision Kit",
-  "version": "2.0.0",
-  "description": "23 project-agnostic engineering skills (recon, modern integration, legacy cleanup, testing, verification, debugging, security, CI, docs, performance, migrations, UI checks) plus hooks that inject build/test commands at session start and block commits that leak secrets or fail checks.",
+  "version": "2.1.0",
+  "description": "24 project-agnostic engineering skills (recon, live modernization against current registries/advisories, modern integration, legacy cleanup, testing, verification, debugging, security, CI, docs, performance, migrations, UI checks) plus hooks that inject build/test commands at session start and block commits that leak secrets or fail checks.",
   "author": {
     "name": "Lcpl Osman Gani"
   },
@@ -14,6 +14,12 @@
       "type": "boolean",
       "title": "Verify on commit",
       "description": "Run the project's lint/typecheck/build/test for changed projects before every git commit and block on failures. Secret scanning always runs.",
+      "default": true
+    },
+    "freshness_on_start": {
+      "type": "boolean",
+      "title": "Live freshness note at session start",
+      "description": "Show a one-line summary of outdated/vulnerable/deprecated dependencies at session start. Uses a daily cache refreshed in the background, so startup is never delayed.",
       "default": true
     }
   }
