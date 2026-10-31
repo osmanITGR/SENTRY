@@ -1,8 +1,8 @@
 {
   "name": "precision-kit",
   "displayName": "Precision Kit",
-  "version": "2.1.0",
-  "description": "24 project-agnostic engineering skills (recon, live modernization against current registries/advisories, modern integration, legacy cleanup, testing, verification, debugging, security, CI, docs, performance, migrations, UI checks) plus hooks that inject build/test commands at session start and block commits that leak secrets or fail checks.",
+  "version": "2.2.0",
+  "description": "25 project-agnostic engineering skills (incremental code map for ranged reads, recon, live modernization against current registries/advisories, modern integration, legacy cleanup, testing, verification, debugging, security, CI, docs, performance, migrations, UI checks) plus hooks that keep the code map current, inject build/test commands at session start and block commits that leak secrets or fail checks.",
   "author": {
     "name": "Lcpl Osman Gani"
   },

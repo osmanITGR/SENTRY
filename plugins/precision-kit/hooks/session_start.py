@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DETECT = ROOT / "skills" / "codebase-recon" / "scripts" / "detect_stack.py"
 FRESHNESS = ROOT / "skills" / "live-modernize" / "scripts" / "freshness_report.py"
+CODE_MAP = ROOT / "skills" / "code-map" / "scripts" / "code_map.py"
 DAY = 86400
 
 
@@ -46,6 +47,27 @@ def freshness_line(cwd: Path) -> str | None:
     return out.stdout.strip() or None
 
 
+def code_map_line(cwd: Path) -> str:
+    """Bring the code map up to date (incremental, fast) or build it in the background."""
+    cm_mod = load(CODE_MAP, "code_map")
+    repo = cm_mod.find_repo(cwd)
+    if not (repo / ".claude" / "code-map" / "index.json").exists():
+        flags = {"creationflags": 0x00000008} if os.name == "nt" else {"start_new_session": True}
+        subprocess.Popen([sys.executable, str(CODE_MAP), "--repo", str(repo), "build"], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, **flags)
+        return ("[precision-kit code-map] building the project map in the background. Before opening files use "
+                f"`python3 {CODE_MAP} summary|find|show|refs` and read only the listed line ranges.")
+    cm = cm_mod.CodeMap(repo)
+    res = cm.update()
+    files = cm.data["files"]
+    nsym = sum(len(e["symbols"]) for e in files.values())
+    stale = [f for f in cm.notes if cm.note_for(f)[1]]
+    return (f"[precision-kit code-map] {len(files)} files / {nsym} symbols mapped "
+            f"({len(res['changed']) + len(res['added']) + len(res['removed'])} changed since last session"
+            + (f", {len(stale)} stale notes" if stale else "") + "). Don't read whole files: "
+            f"`python3 {CODE_MAP} summary|find|show|refs|deps`, then ranged Reads (code-map skill).")
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -64,6 +86,10 @@ def main() -> int:
         lines.append(f"- ... {len(det['projects']) - 8} more projects (run detect_stack.py)")
     if det["instruction_files"]:
         lines.append("Read first: " + ", ".join(det["instruction_files"]))
+    try:
+        lines.append(code_map_line(cwd))
+    except Exception as exc:  # the map is an optimisation, never a blocker
+        lines.append(f"[precision-kit code-map] skipped: {exc}")
     if det["projects"]:
         try:
             line = freshness_line(cwd)

@@ -8,7 +8,7 @@
     {
       "name": "precision-kit",
       "source": "./plugins/precision-kit",
-      "description": "24 engineering skills (incl. live modernization) plus session-start and pre-commit quality-gate hooks.",
+      "description": "25 engineering skills (incl. code map and live modernization) plus session-start and pre-commit quality-gate hooks.",
       "category": "productivity"
     }
   ]

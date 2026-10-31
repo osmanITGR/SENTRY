@@ -19,6 +19,8 @@ CI `run:` lines are listed as canonical: when they disagree with a guess, CI win
 Read every instruction file it lists (CLAUDE.md, AGENTS.md, CONTRIBUTING.md) - they override defaults.
 
 ## Step 2 - Locate, narrowing fast
+Start with the `code-map` skill (`summary --path`, `find`, `refs`, `show`): it gives
+file:line ranges without opening files. Fall back to the searches below for strings and text.
 Run independent searches in parallel. Order of precision:
 1. **Exact strings the user/issue mentions** - error text, UI label, route,
    log line, config key: `Grep` for them literally. Fastest path to the code.

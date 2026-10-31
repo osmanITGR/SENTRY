@@ -16,7 +16,8 @@ Speed comes from not doing unnecessary work, never from skipping verification.
 ## Tool-call discipline
 - **Parallelise**: independent reads/greps/commands go in ONE message.
   (e.g. detect_stack + git status + read CLAUDE.md together.)
-- **Targeted reads**: Grep first, then Read with offset/limit around the hit.
+- **Targeted reads**: `code-map` (`find`/`show`/`refs`) or Grep first, then Read with
+  offset/limit for exactly that range.
   Read whole files only when you will edit them or must understand them fully.
 - **No re-reads**: don't re-open a file you just wrote/edited to "check" it;
   the tool already confirmed it. Don't re-run a passing command without a change in between.

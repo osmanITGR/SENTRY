@@ -27,7 +27,8 @@ gate: a one-line fix still gets located precisely, verified and self-reviewed.
 | CI / pipelines / releases | `ci-setup` |
 | Docs | `docs-sync` |
 | PR review comments / red checks | `pr-feedback` |
-Always on: `efficiency-guard` (start), `codebase-recon` (before edits),
+Always on: `efficiency-guard` (start), `code-map` (orient + ranged reads; keep notes current),
+`codebase-recon` (before edits),
 `verification-gate` + `secret-scan` + `self-review` (before commit),
 `docs-sync` + `project-memory` (when behaviour or setup changed), `git-delivery` (end).
 
@@ -37,7 +38,7 @@ Always on: `efficiency-guard` (start), `codebase-recon` (before edits),
 |---|-------|-------|-----------|
 | 0 | Budget | `efficiency-guard` | Task sized (S/M/L), stop condition known |
 | 1 | Intake | `task-intake` | Acceptance criteria written; assumptions stated |
-| 2 | Recon | `codebase-recon` | Exact files/lines named; conventions + check commands known |
+| 2 | Recon | `code-map`, `codebase-recon` | Exact files/lines named; conventions + check commands known |
 | 3 | Baseline | `verification-gate` | Checks run BEFORE editing; pre-existing failures recorded |
 | 4 | Plan | (this file) | Smallest diff meeting every criterion; blast radius listed |
 | 5 | Implement | routed skills above | Project idiom, current APIs, no guessing |

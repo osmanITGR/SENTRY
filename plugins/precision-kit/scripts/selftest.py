@@ -31,6 +31,8 @@ SESSION = KIT / "hooks/session_start.py"
 PACKAGE = KIT / "scripts/package_skills.py"
 FRESH = SKILLS / "live-modernize/scripts/freshness_report.py"
 DEPREC = SKILLS / "live-modernize/scripts/find_deprecations.py"
+CODE_MAP = SKILLS / "code-map/scripts/code_map.py"
+POST_EDIT = KIT / "hooks/post_edit_map.py"
 failures: list[str] = []
 
 
@@ -346,6 +348,96 @@ def test_live_modernize() -> None:
                   "deprecations: finds deprecated API at file:line with replacement hint")
 
 
+def test_code_map() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        write(root, "web/src/net/client.ts", "// HTTP client for the command API.\n"
+              "import { retry } from '../util/retry'\n\n"
+              "export class Client {\n  constructor(private base: string) {}\n\n"
+              "  async send(cmd: { op: string }): Promise<void> {\n    await retry(() => fetch(this.base))\n  }\n"
+              "  ping() { return true }\n}\n\nexport const makeClient = (url: string) => new Client(url)\n")
+        write(root, "web/src/util/retry.ts", "/** Retry with backoff. */\nexport async function retry<T>(fn: () => Promise<T>): Promise<T> {\n"
+              "  for (;;) {\n    try { return await fn() } catch (e) { /* again */ }\n  }\n}\n")
+        write(root, "web/src/ui/Hud.tsx", "import { makeClient } from '../net/client'\n\n"
+              "export function Hud({ url }: { url: string }) {\n  const c = makeClient(url)\n  return null\n}\n")
+        write(root, "api/svc.py", '"""Scan service."""\nfrom store import save\n\n\nclass Scan:\n    @staticmethod\n'
+              '    def validate(p):\n        return bool(p)\n\n    def handle(self, p):\n        return save(p)\n')
+        write(root, "api/store.py", "def save(p):\n    return p\n")
+        write(root, "svc/go.mod", "module example.com/svc\n\ngo 1.22\n")
+        write(root, "svc/main.go", "package main\n\nimport (\n\t\"example.com/svc/store\"\n)\n\n"
+              "func main() {\n\tstore.New().Count()\n}\n")
+        write(root, "svc/store/store.go", "package store\n\ntype Store struct {\n\titems []string\n}\n\n"
+              "func New() *Store { return &Store{} }\n\nfunc (s *Store) Count() int {\n\treturn len(s.items)\n}\n")
+        write(root, "dist/bundle.min.js", "x")
+        git_commit_all(root)
+        cm = lambda *a: subprocess.run([sys.executable, str(CODE_MAP), "--repo", str(root), *a],
+                                       capture_output=True, text=True, timeout=120)
+
+        b = cm("build")
+        check(b.returncode == 0 and "added" in b.stdout, "code-map: build")
+        show = cm("show", "web/src/net/client.ts").stdout
+        check("4-11" in show and "Client " in show, "code-map: class range 4-11")
+        check(re.search(r"7-9\s+method\s+Client\.send", show) is not None, "code-map: method with inline-type param 7-9")
+        check(re.search(r"10-10\s+method\s+Client\.ping", show) is not None, "code-map: one-line method")
+        check("imports: web/src/util/retry.ts" in show and "imported by (1): web/src/ui/Hud.tsx" in show,
+              "code-map: import graph both directions")
+        check("purpose: HTTP client for the command API." in show, "code-map: purpose from leading comment")
+        hud = cm("show", "web/src/ui/Hud.tsx").stdout
+        check(re.search(r"3-6\s+function\s+Hud", hud) is not None, "code-map: destructured params don't end block early")
+        py = cm("show", "api/svc.py").stdout
+        check(re.search(r"6-8\s+method\s+Scan\.validate", py) is not None, "code-map: python range includes decorator")
+        go = cm("show", "svc/store/store.go").stdout
+        check(re.search(r"9-11\s+method\s+Store\.Count", go) is not None, "code-map: go receiver method qualified")
+        check("svc/main.go" in cm("deps", "svc/store/store.go").stdout, "code-map: go module import resolved")
+        check("dist/bundle.min.js" not in cm("summary").stdout, "code-map: build output / minified files skipped")
+        f = cm("find", "send").stdout.splitlines()
+        check(bool(f) and f[0].startswith("web/src/net/client.ts:7-9"), "code-map: find returns exact range first")
+        r = cm("refs", "makeClient").stdout
+        check("in Hud:3-6" in r and "DEF in makeClient" in r, "code-map: refs show enclosing symbol and definition")
+        d = cm("deps", "web/src/util/retry.ts", "--depth", "2").stdout
+        check("web/src/net/client.ts" in d and "web/src/ui/Hud.tsx" in d, "code-map: transitive reverse deps")
+        gi = (root / ".claude/code-map/.gitignore").read_text()
+        check("index.json" in gi and "MAP.md" in gi and "notes" not in gi.split("\n", 1)[1],
+              "code-map: generated files gitignored, notes committed")
+
+        cm("note", "web/src/net/client.ts", "Command API client")
+        cm("note", "web/src/", "Frontend")
+        check("Command API client" in cm("summary").stdout and "## web/src/ - Frontend" in cm("summary").stdout,
+              "code-map: notes appear in summary")
+        p = root / "web/src/net/client.ts"
+        p.write_text(p.read_text().replace("return true", "return false"))
+        out = cm("stale")
+        check("1 changed" in out.stderr and "all notes current" in out.stdout,
+              "code-map: body edit re-indexes 1 file, note stays current")
+        p.write_text(p.read_text() + "\nexport function extra() {}\n")
+        hook_out = subprocess.run([sys.executable, str(POST_EDIT)], input=json.dumps(
+            {"tool_name": "Edit", "tool_input": {"file_path": str(p)}}), capture_output=True, text=True).stdout
+        check("stale" in hook_out and "web/src/net/client.ts" in hook_out, "post-edit hook: stale note reminder")
+        check("STALE   web/src/net/client.ts" in cm("stale").stdout, "code-map: shape change marks note stale")
+        (root / "api/store.py").unlink()
+        write(root, "api/new_mod.py", "def fresh():\n    pass\n")
+        out = cm("find", "fresh")
+        check("1 added" in out.stderr and "1 removed" in out.stderr and "api/new_mod.py:1-2" in out.stdout,
+              "code-map: deleted and untracked files tracked incrementally")
+        out = cm("find", "fresh")
+        check(out.stderr == "", "code-map: no-change query does no re-indexing")
+
+    with tempfile.TemporaryDirectory() as tmp:  # speed on a few hundred files
+        root = Path(tmp)
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        body = "".join(f"def f{i}(x):\n    return x + {i}\n\n" for i in range(40))
+        for k in range(400):
+            write(root, f"pkg{k % 20}/m{k}.py", body)
+        t = time.time()
+        subprocess.run([sys.executable, str(CODE_MAP), "--repo", str(root), "build"], capture_output=True, timeout=300)
+        build_s = time.time() - t
+        t = time.time()
+        subprocess.run([sys.executable, str(CODE_MAP), "--repo", str(root), "find", "f39"], capture_output=True)
+        query_s = time.time() - t
+        check(build_s < 20 and query_s < 3, f"code-map: 400 files build {build_s:.1f}s, query {query_s:.2f}s")
+
+
 if __name__ == "__main__":
     validate_skills()
     test_scripts()
@@ -353,5 +445,6 @@ if __name__ == "__main__":
     test_ci_and_packaging()
     test_hooks()
     test_live_modernize()
+    test_code_map()
     print(f"\n{'ALL PASSED' if not failures else f'{len(failures)} FAILED'}")
     sys.exit(1 if failures else 0)
