@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "precision-kit": {
+      "source": {
+        "source": "github",
+        "repo": "osmanITGR/precision-kit"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "precision-kit@precision-kit": true
+  }
+}
